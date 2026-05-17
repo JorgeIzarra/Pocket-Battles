@@ -1,0 +1,5 @@
+{
+  "name": "pocket-battles",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "@pocket-battles/battle-engine",
+  "version": "0.0.1",
+  "private": true,
+  "module": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

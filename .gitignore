@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Documentación interna del proyecto (no se envía a GitHub)
+CONTEXT.md
+*.pdf
+pokemon-battle-system/
+
+# Claude Code (configuración local del agente)
+.claude/
