@@ -147,11 +147,71 @@ docker exec pocket-battles-mongo-1 mongosh pocket_battles --eval \
 
 ---
 
-## DÍA 4 — API de batalla (pendiente)
+## DÍA 4 — API de batalla ✅ COMPLETO
 
-- `routes/battle.ts`: `POST /battle/:code/action`, `GET /battle/:code/state`, `GET /battle/:code/stream` (SSE)
-- `services/battleService.ts`: orquestador engine ↔ MongoDB, emisión SSE
-- `routes/catalog.ts`: `GET /catalog/pokemon`, `GET /catalog/pokemon/:id`
+**Commit:** pendiente
+
+### Qué se construyó
+
+| Archivo | Acción |
+|---|---|
+| `apps/api/src/services/battleService.ts` | **Nuevo** — SSE registry + orquestador engine ↔ MongoDB |
+| `apps/api/src/routes/battle.ts` | **Nuevo** — 3 endpoints de batalla |
+| `apps/api/src/routes/catalog.ts` | **Nuevo** — 2 endpoints de catálogo |
+| `apps/api/src/index.ts` | Actualizado — registra `/battle` y `/catalog` |
+
+### Endpoints implementados
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/battle/:code/action` | Jugador envía decisión; si hay 2 acciones, resuelve el turno |
+| `GET` | `/battle/:code/state` | Estado completo de la batalla (carga inicial / plan B) |
+| `GET` | `/battle/:code/stream` | SSE — estado nuevo tras cada turno resuelto |
+| `GET` | `/catalog/pokemon` | Lista paginada; filtros `?name=` y `?type=` |
+| `GET` | `/catalog/pokemon/:id` | Detalle con moves poblados |
+
+### Flujo del turno
+1. P1 envía acción → `{ status: "waiting" }` (1 acción guardada con `$push`)
+2. P2 envía acción → motor ejecuta `resolveTurn` → `Battle.replaceOne` → `broadcastSSE` → `{ status: "resolved", state: {...} }`
+3. Clientes SSE reciben el estado nuevo automáticamente
+
+### Validaciones de acción
+- Jugador pertenece a la batalla
+- Pokémon activo tiene HP > 0
+- `move`: moveId pertenece al Pokémon activo
+- `switch`: índice válido, Pokémon destino vivo, diferente al activo
+- No actuar dos veces en el mismo turno
+
+### SSE
+- Registro global: `Map<roomCode, Set<ReadableStreamDefaultController>>`
+- Al conectarse: entrega el estado actual inmediatamente (sin esperar el siguiente turno)
+- Al desconectarse: limpia el controller del registro
+- `X-Accel-Buffering: no` para compatibilidad con nginx
+
+### Cómo verificar
+```bash
+# Estado de la batalla
+curl localhost:3001/battle/XXXXX/state
+
+# Turno completo (dos terminales)
+curl -X POST localhost:3001/battle/XXXXX/action \
+  -H "Content-Type: application/json" \
+  -d '{"playerId":"uuid-1","type":"move","moveId":"flamethrower"}'
+# → {"status":"waiting"}
+
+curl -X POST localhost:3001/battle/XXXXX/action \
+  -H "Content-Type: application/json" \
+  -d '{"playerId":"uuid-2","type":"move","moveId":"surf"}'
+# → {"status":"resolved","state":{...log con daño, tipo, crits...}}
+
+# SSE
+curl -N localhost:3001/battle/XXXXX/stream
+# → data: {...estado completo...} (en tiempo real)
+
+# Catálogo
+curl "localhost:3001/catalog/pokemon?type=dragon&limit=5"
+curl "localhost:3001/catalog/pokemon/6a0a45ad3d0ebf0c32408030"
+```
 
 ## DÍA 5 — Frontend TanStack Start (pendiente)
 
