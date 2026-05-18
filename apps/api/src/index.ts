@@ -1,9 +1,11 @@
 import { Hono } from 'hono';
 import { connectDB } from './db';
+import rooms from './routes/rooms';
 
 const app = new Hono();
 
 app.get('/health', (c) => c.json({ ok: true }));
+app.route('/rooms', rooms);
 
 const PORT = parseInt(process.env.PORT ?? '3001');
 
