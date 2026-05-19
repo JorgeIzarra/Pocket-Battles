@@ -1,0 +1,78 @@
+/* =========================================================
+   POCKET BATTLES — design tokens
+   Handheld-2007 warm cream aesthetic
+   ========================================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap');
+
+:root {
+  /* Surface — light theme */
+  --bg: #efe3c4;
+  --bg-deep: #e3d2a8;
+  --surface: #fbf6e7;
+  --surface-2: #f3eacf;
+  --surface-sunk: #e8dab2;
+  --ink: #2b2218;
+  --ink-soft: #5a4a36;
+  --ink-mute: #8c7a5e;
+  --line: #2b2218;
+  --line-soft: #b39c70;
+  --hl: #fff7d9;
+  --shadow: rgba(43, 34, 24, 0.18);
+
+  /* Accents */
+  --accent: #c25a3a;
+  --accent-2: #2e6db4;
+  --good: #5a9b3c;
+  --warn: #d99a2b;
+  --bad: #c43a2d;
+
+  /* HP bar */
+  --hp-high: #4ea64a;
+  --hp-mid: #e6a93a;
+  --hp-low: #c4392c;
+
+  /* Frame */
+  --frame-w: 4px;
+  --frame-r: 14px;
+  --frame-inner-r: 9px;
+
+  /* Type colors — 18 PokéAPI types (English) */
+  --t-normal:   #a8a878;
+  --t-fire:     #e45a3a;
+  --t-water:    #4a82c9;
+  --t-electric: #e8b734;
+  --t-grass:    #67b04c;
+  --t-ice:      #82c4d6;
+  --t-fighting: #c8604a;
+  --t-poison:   #8c5cb4;
+  --t-ground:   #a07845;
+  --t-flying:   #8498c8;
+  --t-psychic:  #d268a8;
+  --t-bug:      #7a9a30;
+  --t-rock:     #b09060;
+  --t-ghost:    #5a4878;
+  --t-dragon:   #7038f8;
+  --t-dark:     #4a3a48;
+  --t-steel:    #94a0ad;
+  --t-fairy:    #e090b8;
+
+  --font-pixel: "Silkscreen", "VT323", ui-monospace, monospace;
+  --font-body: "VT323", "Silkscreen", ui-monospace, monospace;
+  --font-label: "Silkscreen", "VT323", ui-monospace, monospace;
+}
+
+[data-theme="dark"] {
+  --bg: #1b1714;
+  --bg-deep: #14110e;
+  --surface: #2a2218;
+  --surface-2: #221c14;
+  --surface-sunk: #15110d;
+  --ink: #f3e6c4;
+  --ink-soft: #c9b78a;
+  --ink-mute: #93805e;
+  --line: #f3e6c4;
+  --line-soft: #6a583c;
+  --hl: #3a2f1f;
+  --shadow: rgba(0, 0, 0, 0.5);
+}

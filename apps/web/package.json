@@ -2,8 +2,24 @@
   "name": "@pocket-battles/web",
   "version": "0.0.1",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "bun run index.ts",
-    "start": "bun run index.ts"
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "1.170.4",
+    "@tanstack/react-start": "1.168.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "vinxi": "^0.5.11",
+    "vite": "^8.0.13"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^6.0.3"
   }
 }

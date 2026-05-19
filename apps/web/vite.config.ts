@@ -1,0 +1,9 @@
+import { defineConfig } from 'vite';
+import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+
+export default defineConfig({
+  plugins: [tanstackStart({ srcDirectory: 'app' })],
+  server: {
+    port: 3000,
+  },
+});

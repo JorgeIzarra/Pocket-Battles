@@ -14,10 +14,6 @@
         "mongoose": "^8.9.0",
       },
     },
-    "apps/web": {
-      "name": "@pocket-battles/web",
-      "version": "0.0.1",
-    },
     "packages/battle-engine": {
       "name": "@pocket-battles/battle-engine",
       "version": "0.0.1",
@@ -29,8 +25,6 @@
     "@pocket-battles/api": ["@pocket-battles/api@workspace:apps/api"],
 
     "@pocket-battles/battle-engine": ["@pocket-battles/battle-engine@workspace:packages/battle-engine"],
-
-    "@pocket-battles/web": ["@pocket-battles/web@workspace:apps/web"],
 
     "@types/webidl-conversions": ["@types/webidl-conversions@7.0.3", "", {}, "sha512-CiJJvcRtIgzadHCYXw7dqEnMNRjhGZlYK05Mj9OyktqV8uVT8fD2BFOB7S1uwBE3Kj2Z+4UyPmFw/Ixgw/LAlA=="],
 

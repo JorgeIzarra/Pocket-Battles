@@ -10,3 +10,15 @@ pokemon-battle-system/
 
 # Claude Code (configuración local del agente)
 .claude/
+docs/Compact.md
+
+# Capturas de pantalla y archivos temporales
+*.png
+*.jpg
+*.jpeg
+
+# Artefactos de build de TanStack Start (versiones viejas)
+apps/web/app.config.timestamp_*.js
+
+# Lock file de npm para apps/web (manejado independiente del workspace de Bun)
+apps/web/package-lock.json
