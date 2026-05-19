@@ -27,6 +27,13 @@ function BattleScreen() {
 
   const [phase, setPhase] = useState<'choose' | 'waiting' | 'switch'>('choose');
   const [actionError, setActionError] = useState<string | null>(null);
+  const [lastTurn, setLastTurn] = useState(0);
+
+  // Reset phase to 'choose' when a turn resolves (SSE pushes new state)
+  if (state && state.turn !== lastTurn) {
+    setLastTurn(state.turn);
+    setPhase('choose');
+  }
 
   if (error) {
     return (
@@ -59,14 +66,6 @@ function BattleScreen() {
 
   const myActive: BattlePokemon = myPlayerState.team[myPlayerState.activeIndex];
   const oppActive: BattlePokemon = oppPlayerState.team[oppPlayerState.activeIndex];
-
-  // Reset phase to 'choose' when state updates from SSE (turn resolved)
-  // We track this via the turn number
-  const [lastTurn, setLastTurn] = useState(state.turn);
-  if (state.turn !== lastTurn) {
-    setLastTurn(state.turn);
-    setPhase('choose');
-  }
 
   async function handleMove(moveId: string) {
     if (phase !== 'choose') return;

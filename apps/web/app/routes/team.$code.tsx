@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
-import { getCatalog, submitTeam, startBattle, type PokemonSummary, type MoveDetail, getPokemonDetail } from '../lib/api';
+import { getCatalog, submitTeam, startBattle, getRoomState, type PokemonSummary, type MoveDetail, getPokemonDetail } from '../lib/api';
 import { TypeBadge, PixelFrame, CreatureCard, TitleBar } from '../components/shared';
 import { TYPE_LIST, typeColor } from '../lib/types';
 
@@ -100,13 +100,27 @@ function TeamSelectScreen() {
     setError(null);
     try {
       await submitTeam(code, playerId, team.map(e => ({ pokemonId: e.pokemon._id, moveIds: e.moveIds })));
-      // After submitting team, try to start. If the other player hasn't submitted yet,
-      // we poll the room until in_battle then navigate.
+
+      // Try to start battle immediately (succeeds if rival already submitted)
+      let started = false;
       try {
         await startBattle(code);
+        started = true;
       } catch {
-        // Other player hasn't submitted yet — they will trigger start. Poll lobby.
+        // Rival hasn't submitted yet — wait for them
       }
+
+      if (!started) {
+        // Poll room state until the rival triggers startBattle and the battle exists
+        let attempts = 0;
+        while (attempts < 60) {
+          await new Promise(r => setTimeout(r, 1500));
+          const room = await getRoomState(code);
+          if (room.status === 'in_battle') break;
+          attempts++;
+        }
+      }
+
       navigate({ to: '/battle/$code', params: { code } });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al enviar el equipo');
