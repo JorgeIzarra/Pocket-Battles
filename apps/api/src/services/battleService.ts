@@ -58,23 +58,24 @@ export async function submitAction(
   const player = players.find(p => p.playerId === action.playerId);
   if (!player) throw new Error('No perteneces a esta batalla');
 
-  // 2. Active pokémon is alive
   const active = player.team[player.activeIndex];
-  if (active.currentHp <= 0)
-    throw new Error('Tu Pokémon activo está debilitado — debes cambiar primero');
 
   // 3. Action-specific validation
   if (action.type === 'move') {
+    // Moves require the active Pokémon to be alive; switch is valid even when fainted
+    if (active.currentHp <= 0)
+      throw new Error('Tu Pokémon activo está debilitado — debes cambiar primero');
     if (!action.moveId) throw new Error('moveId es requerido');
     if (!active.moves.some(m => m.moveId === action.moveId))
       throw new Error('Ese movimiento no pertenece a tu Pokémon activo');
   } else if (action.type === 'switch') {
-    if (action.switchToIndex === undefined) throw new Error('switchToIndex es requerido');
-    const target = player.team[action.switchToIndex];
-    if (!target) throw new Error('Índice de Pokémon inválido');
+    if (action.switchToIndex === undefined || !Number.isInteger(action.switchToIndex))
+      throw new Error('switchToIndex debe ser un entero');
+    if (action.switchToIndex < 0 || action.switchToIndex >= player.team.length)
+      throw new Error('switchToIndex fuera de rango');
     if (action.switchToIndex === player.activeIndex)
       throw new Error('Ese Pokémon ya está activo');
-    if (target.currentHp <= 0)
+    if (player.team[action.switchToIndex].currentHp <= 0)
       throw new Error('No puedes cambiar a un Pokémon debilitado');
   } else {
     throw new Error('Tipo de acción inválido: usa "move" o "switch"');

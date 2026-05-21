@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { useBattleState, type BattlePokemon, type PlayerState } from '../hooks/useBattleState';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useBattleState, type BattlePokemon, type BattleState, type PlayerState } from '../hooks/useBattleState';
 import { sendAction } from '../lib/api';
 import { BattleLog, CreatureSprite, HealthBar, HPBox, MoveButton, PixelFrame, Platform, TitleBar, TypeBadge } from '../components/shared';
 import { typeColor } from '../lib/types';
@@ -14,6 +14,44 @@ const BG = {
   floor: '#9bbf6f',
   platformColor: 'var(--t-grass)',
 };
+
+function AnimSprite({
+  spriteUrl,
+  name,
+  size,
+  facing,
+  animClass,
+}: {
+  spriteUrl: string;
+  name: string;
+  size: number;
+  facing: 'front' | 'back';
+  animClass: string;
+}) {
+  const [cls, setCls] = useState('');
+
+  // Enter animation on first mount (fires after first paint so no flash)
+  useEffect(() => {
+    setCls('enter');
+    const t = setTimeout(() => setCls(''), 400);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Sync parent animation class; remove+re-add via RAF to force CSS replay
+  // even when the same class fires two turns in a row
+  useEffect(() => {
+    if (!animClass) return;
+    setCls('');
+    const raf = requestAnimationFrame(() => setCls(animClass));
+    return () => cancelAnimationFrame(raf);
+  }, [animClass]);
+
+  return (
+    <div className={cls}>
+      <CreatureSprite spriteUrl={spriteUrl} name={name} size={size} facing={facing} />
+    </div>
+  );
+}
 
 function BattleScreen() {
   const { code } = Route.useParams();
@@ -29,11 +67,84 @@ function BattleScreen() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastTurn, setLastTurn] = useState(0);
 
-  // Reset phase to 'choose' when a turn resolves (SSE pushes new state)
+  // Animation state
+  const [myAnimClass, setMyAnimClass] = useState('');
+  const [oppAnimClass, setOppAnimClass] = useState('');
+  const prevStateRef = useRef<BattleState | null>(null);
+  const myTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const oppTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset phase + trigger animations when a turn resolves
   if (state && state.turn !== lastTurn) {
     setLastTurn(state.turn);
     setPhase('choose');
   }
+
+  // Derive which player is "mine" early so we can use it in the layout effect
+  const myIdx = state ? (state.players[0].playerId === playerId ? 0 : 1) : 0;
+  const oppIdx = 1 - myIdx;
+
+  // Computed before early returns so hooks below can reference them safely
+  const canSwitch = state
+    ? state.players[myIdx].team.some((p, i) => p.currentHp > 0 && i !== state.players[myIdx].activeIndex)
+    : false;
+  const myActiveFainted = state
+    ? state.players[myIdx].team[state.players[myIdx].activeIndex].currentHp <= 0
+    : false;
+
+  useLayoutEffect(() => {
+    if (!state) return;
+    const prev = prevStateRef.current;
+    prevStateRef.current = state;
+    if (!prev || state.turn === prev.turn) return;
+
+    const myPrev = prev.players[myIdx];
+    const oppPrev = prev.players[oppIdx];
+    const myCurr = state.players[myIdx];
+    const oppCurr = state.players[oppIdx];
+
+    const myPrevActive = myPrev.team[myPrev.activeIndex];
+    const oppPrevActive = oppPrev.team[oppPrev.activeIndex];
+    const myCurrActive = myCurr.team[myCurr.activeIndex];
+    const oppCurrActive = oppCurr.team[oppCurr.activeIndex];
+
+    const myTookDamage = myCurrActive.pokemonId === myPrevActive.pokemonId &&
+      myCurrActive.currentHp < myPrevActive.currentHp;
+    const oppTookDamage = oppCurrActive.pokemonId === oppPrevActive.pokemonId &&
+      oppCurrActive.currentHp < oppPrevActive.currentHp;
+
+    // Clear any pending timeouts from the previous turn
+    if (myTimeoutRef.current) clearTimeout(myTimeoutRef.current);
+    if (oppTimeoutRef.current) clearTimeout(oppTimeoutRef.current);
+
+    if (myTookDamage && oppTookDamage) {
+      setMyAnimClass('shake flash');
+      setOppAnimClass('shake flash');
+      // Reset to '' after animation so next turn sees a real state change
+      myTimeoutRef.current = setTimeout(() => setMyAnimClass(''), 560);
+      oppTimeoutRef.current = setTimeout(() => setOppAnimClass(''), 560);
+    } else if (oppTookDamage) {
+      setMyAnimClass('attack-r');
+      myTimeoutRef.current = setTimeout(() => setMyAnimClass(''), 300);
+      oppTimeoutRef.current = setTimeout(() => {
+        setOppAnimClass('shake flash');
+        oppTimeoutRef.current = setTimeout(() => setOppAnimClass(''), 560);
+      }, 480);
+    } else if (myTookDamage) {
+      setOppAnimClass('attack-l');
+      oppTimeoutRef.current = setTimeout(() => setOppAnimClass(''), 300);
+      myTimeoutRef.current = setTimeout(() => {
+        setMyAnimClass('shake flash');
+        myTimeoutRef.current = setTimeout(() => setMyAnimClass(''), 560);
+      }, 480);
+    }
+  }, [state, myIdx, oppIdx]);
+
+  // Auto-open switch panel when the player's active faints
+  useEffect(() => {
+    if (!state || state.status === 'finished') return;
+    if (myActiveFainted && canSwitch && phase === 'choose') setPhase('switch');
+  }, [myActiveFainted, canSwitch, phase, state?.status]);
 
   if (error) {
     return (
@@ -60,12 +171,14 @@ function BattleScreen() {
     );
   }
 
-  // Determine which player state belongs to us
-  const myPlayerState: PlayerState = state.players[0].playerId === playerId ? state.players[0] : state.players[1];
-  const oppPlayerState: PlayerState = state.players[0].playerId === playerId ? state.players[1] : state.players[0];
+  const myPlayerState: PlayerState = state.players[myIdx];
+  const oppPlayerState: PlayerState = state.players[oppIdx];
 
   const myActive: BattlePokemon = myPlayerState.team[myPlayerState.activeIndex];
   const oppActive: BattlePokemon = oppPlayerState.team[oppPlayerState.activeIndex];
+
+  const myEffectiveClass = myActive.currentHp === 0 ? 'faint' : myAnimClass;
+  const oppEffectiveClass = oppActive.currentHp === 0 ? 'faint' : oppAnimClass;
 
   async function handleMove(moveId: string) {
     if (phase !== 'choose') return;
@@ -76,7 +189,6 @@ function BattleScreen() {
       if (result.status === 'resolved') {
         // State will update via SSE, phase reset there
       }
-      // If 'waiting', stay in waiting phase until SSE pushes new state
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Error');
       setPhase('choose');
@@ -94,9 +206,6 @@ function BattleScreen() {
       setPhase('choose');
     }
   }
-
-  const alive = myPlayerState.team.filter(p => p.currentHp > 0);
-  const canSwitch = alive.length > 1;
 
   return (
     <>
@@ -119,7 +228,14 @@ function BattleScreen() {
             <div style={{ position: 'absolute', top: 70, right: 110, width: 200, height: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
               <Platform width={220} color={BG.platformColor} style={{ right: -10 }} />
               <div style={{ position: 'relative', zIndex: 2 }}>
-                <CreatureSprite spriteUrl={oppActive.spriteUrl} name={oppActive.name} size={170} facing="front" />
+                <AnimSprite
+                  key={oppActive.pokemonId}
+                  spriteUrl={oppActive.spriteFrontUrl}
+                  name={oppActive.name}
+                  size={170}
+                  facing="front"
+                  animClass={oppEffectiveClass}
+                />
               </div>
             </div>
 
@@ -127,7 +243,14 @@ function BattleScreen() {
             <div style={{ position: 'absolute', bottom: 28, left: 90, width: 240, height: 220, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
               <Platform width={260} color={BG.platformColor} style={{ left: -10 }} />
               <div style={{ position: 'relative', zIndex: 2 }}>
-                <CreatureSprite spriteUrl={myActive.spriteUrl} name={myActive.name} size={200} facing="back" />
+                <AnimSprite
+                  key={myActive.pokemonId}
+                  spriteUrl={myActive.spriteBackUrl}
+                  name={myActive.name}
+                  size={200}
+                  facing="back"
+                  animClass={myEffectiveClass}
+                />
               </div>
             </div>
 
@@ -173,6 +296,7 @@ function BattleScreen() {
                   active={myPlayerState.activeIndex}
                   onPick={handleSwitch}
                   onCancel={() => setPhase('choose')}
+                  mandatory={myActive.currentHp === 0}
                 />
               ) : (
                 <>
@@ -181,7 +305,7 @@ function BattleScreen() {
                       <MoveButton
                         key={i}
                         move={myActive.moves[i]}
-                        disabled={phase !== 'choose' || state.status === 'finished'}
+                        disabled={phase !== 'choose' || state.status === 'finished' || myActive.currentHp === 0}
                         onClick={() => myActive.moves[i] && handleMove(myActive.moves[i].moveId)}
                       />
                     ))}
@@ -226,13 +350,18 @@ function TeamDots({ team, style, label }: { team: BattlePokemon[]; style: React.
   );
 }
 
-function SwitchPanel({ team, active, onPick, onCancel }: { team: BattlePokemon[]; active: number; onPick: (i: number) => void; onCancel: () => void }) {
+function SwitchPanel({ team, active, onPick, onCancel, mandatory }: { team: BattlePokemon[]; active: number; onPick: (i: number) => void; onCancel: () => void; mandatory: boolean }) {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <span className="pixel-label">CAMBIAR CRIATURA</span>
-        <button className="btn btn--sm btn--ghost" onClick={onCancel}>← VOLVER</button>
+        {!mandatory && <button className="btn btn--sm btn--ghost" onClick={onCancel}>← VOLVER</button>}
       </div>
+      {mandatory && (
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--bad)' }}>
+          Tu Pokémon se debilitó. Elige un reemplazo.
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
         {team.map((p, i) => {
           const fainted = p.currentHp <= 0;
@@ -245,7 +374,7 @@ function SwitchPanel({ team, active, onPick, onCancel }: { team: BattlePokemon[]
               style={{ position: 'relative', display: 'grid', gridTemplateColumns: '44px 1fr', gap: 6, alignItems: 'center', padding: 6, background: isActive ? 'var(--hl)' : fainted ? 'var(--surface-sunk)' : 'var(--surface)', border: `3px solid ${isActive ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 8, cursor: (isActive || fainted) ? 'not-allowed' : 'pointer', opacity: fainted ? 0.5 : 1, textAlign: 'left', fontFamily: 'var(--font-body)', color: 'var(--ink)' }}
             >
               <div style={{ background: 'var(--surface-sunk)', borderRadius: 6, border: '2px solid var(--line-soft)', padding: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', width: 44, height: 44 }}>
-                <CreatureSprite spriteUrl={p.spriteUrl} name={p.name} size={36} />
+                <CreatureSprite spriteUrl={p.spriteFrontUrl} name={p.name} size={36} />
               </div>
               <div className="col gap-4">
                 <div className="row" style={{ justifyContent: 'space-between' }}>

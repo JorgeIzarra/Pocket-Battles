@@ -59,7 +59,7 @@ export interface PokemonSummary {
   name: string;
   types: string[];
   baseStats: Record<string, number>;
-  spriteUrl: string;
+  spriteFrontUrl: string;
   isLegendary: boolean;
 }
 

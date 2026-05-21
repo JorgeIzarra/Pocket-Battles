@@ -18,7 +18,7 @@ catalog.get('/pokemon', async (c) => {
 
     const [pokemon, total] = await Promise.all([
       Pokemon.find(filter)
-        .select('pokedexId name types baseStats spriteUrl isLegendary isFinalEvolution')
+        .select('pokedexId name types baseStats spriteFrontUrl isLegendary isFinalEvolution')
         .sort({ pokedexId: 1 })
         .skip(skip)
         .limit(limitNum)

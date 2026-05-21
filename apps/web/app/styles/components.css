@@ -184,6 +184,29 @@ input { font-family: inherit; }
 }
 .faint { animation: faint 700ms forwards; }
 
+@keyframes enter {
+  0% { opacity: 0; transform: translateY(28px) scale(0.82); }
+  60% { opacity: 1; transform: translateY(-6px) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.enter { animation: enter 360ms cubic-bezier(.22,.68,0,1.2) both; }
+
+@keyframes attackRight {
+  0%   { transform: translateX(0)    scaleX(1); }
+  40%  { transform: translateX(38px) scaleX(1.08); }
+  70%  { transform: translateX(32px) scaleX(1); }
+  100% { transform: translateX(0)    scaleX(1); }
+}
+.attack-r { animation: attackRight 280ms ease-out; }
+
+@keyframes attackLeft {
+  0%   { transform: translateX(0)     scaleX(1); }
+  40%  { transform: translateX(-38px) scaleX(1.08); }
+  70%  { transform: translateX(-32px) scaleX(1); }
+  100% { transform: translateX(0)     scaleX(1); }
+}
+.attack-l { animation: attackLeft 280ms ease-out; }
+
 @keyframes pulse {
   0%, 100% { transform: scale(0.8); opacity: 0.55; }
   50% { transform: scale(1.15); opacity: 1; }

@@ -219,7 +219,7 @@ function TeamSelectScreen() {
                     >
                       {entry ? (
                         <>
-                          <img src={entry.pokemon.spriteUrl} alt={entry.pokemon.name} width={48} height={48} style={{ imageRendering: 'pixelated', objectFit: 'contain' }} />
+                          <img src={entry.pokemon.spriteFrontUrl} alt={entry.pokemon.name} width={48} height={48} style={{ imageRendering: 'pixelated', objectFit: 'contain' }} />
                           <span style={{ fontFamily: 'var(--font-label)', fontSize: 9, letterSpacing: 0.4, color: 'var(--ink)' }}>{entry.pokemon.name}</span>
                           <span style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: movesComplete ? 'var(--good)' : 'var(--warn)', color: '#fff', fontFamily: 'var(--font-label)', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--line)' }}>
                             {movesComplete ? '✓' : '!'}

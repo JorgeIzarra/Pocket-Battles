@@ -225,7 +225,7 @@ interface CreatureCardCreature {
   name: string;
   types: string[];
   baseStats: Record<string, number>;
-  spriteUrl: string;
+  spriteFrontUrl: string;
 }
 interface CreatureCardProps {
   creature: CreatureCardCreature;
@@ -254,7 +254,7 @@ export function CreatureCard({ creature, selected, disabled, onClick }: Creature
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'center', background: 'var(--surface-sunk)', border: '2px solid var(--line-soft)', borderRadius: 6, padding: 4 }}>
-        <CreatureSprite spriteUrl={creature.spriteUrl} name={creature.name} size={64} />
+        <CreatureSprite spriteUrl={creature.spriteFrontUrl} name={creature.name} size={64} />
       </div>
       <div className="row" style={{ justifyContent: 'space-between', marginTop: 2 }}>
         <span style={{ fontFamily: 'var(--font-label)', fontSize: 11, letterSpacing: 0.5 }}>{creature.name}</span>

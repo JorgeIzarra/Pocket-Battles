@@ -174,7 +174,8 @@ interface RawPokemon {
   name: string;
   types: string[];
   baseStats: Record<string, number>;
-  spriteUrl: string | null;
+  spriteFrontUrl: string | null;
+  spriteBackUrl: string | null;
   moveNames: string[];
   isLegendary: boolean;
   isMythical: boolean;
@@ -211,7 +212,8 @@ async function fetchAllPokemon(): Promise<RawPokemon[]> {
         name: pk.name,
         types: pk.types.map((t: any) => t.type.name),
         baseStats,
-        spriteUrl: pk.sprites?.front_default ?? null,
+        spriteFrontUrl: pk.sprites?.front_default ?? null,
+        spriteBackUrl: pk.sprites?.back_default ?? null,
         moveNames: pk.moves.map((m: any) => m.move.name),
         isLegendary: sp.is_legendary ?? false,
         isMythical: sp.is_mythical ?? false,
@@ -338,7 +340,7 @@ async function main() {
   // Filtrar: sprite válido + (evolución final OR legendario/mítico)
   const filtered = rawPokemon.filter(
     (p) =>
-      p.spriteUrl !== null &&
+      p.spriteFrontUrl !== null &&
       (finalEvos.has(p.name) || p.isLegendary || p.isMythical),
   );
   console.log(
@@ -359,6 +361,7 @@ async function main() {
   // Clasificar movimientos por Pokémon y guardar
   let savedPokemon = 0;
   let skippedLessThan4 = 0;
+  let backFallbackCount = 0;
   const pokeDocs = [];
 
   for (const p of filtered) {
@@ -391,7 +394,8 @@ async function main() {
       name: p.name,
       types: p.types,
       baseStats: p.baseStats,
-      spriteUrl: p.spriteUrl!,
+      spriteFrontUrl: p.spriteFrontUrl!,
+      spriteBackUrl: p.spriteBackUrl ?? (++backFallbackCount, p.spriteFrontUrl!),
       damagingMoveIds,
       statusMoveIds,
       isLegendary: p.isLegendary || p.isMythical,
@@ -408,6 +412,7 @@ async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Pokémon guardados:          ${savedPokemon}`);
   console.log(`  Pokémon omitidos (< 4 mov): ${skippedLessThan4}`);
+  console.log(`  Back sprite fallback:       ${backFallbackCount} (usan front_default)`);
   console.log(`  Movimientos guardados:      ${moveDocs.length}`);
   console.log(`  Tipos en la TypeChart:      ${Object.keys(chart).length}`);
 

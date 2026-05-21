@@ -42,15 +42,25 @@ battle.get('/:code/stream', async (c) => {
 
   const enc = new TextEncoder();
   let clientCtrl: ReadableStreamDefaultController<Uint8Array>;
+  let keepaliveInterval: ReturnType<typeof setInterval> | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     start(ctrl) {
       clientCtrl = ctrl;
       battleService.addSSEClient(code, ctrl);
-      // Push current state immediately so the client doesn't have to poll
       ctrl.enqueue(enc.encode(`data: ${JSON.stringify(initialState)}\n\n`));
+
+      // Ping every 15 s so Bun doesn't close the idle connection between turns
+      keepaliveInterval = setInterval(() => {
+        try {
+          ctrl.enqueue(enc.encode(': keepalive\n\n'));
+        } catch {
+          if (keepaliveInterval) clearInterval(keepaliveInterval);
+        }
+      }, 15_000);
     },
     cancel() {
+      if (keepaliveInterval) clearInterval(keepaliveInterval);
       battleService.removeSSEClient(code, clientCtrl);
     },
   });

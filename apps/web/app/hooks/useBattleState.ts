@@ -23,7 +23,8 @@ export interface BattlePokemon {
   pokedexId: number;
   name: string;
   types: string[];
-  spriteUrl: string;
+  spriteFrontUrl: string;
+  spriteBackUrl: string;
   level: number;
   currentHp: number;
   maxHp: number;

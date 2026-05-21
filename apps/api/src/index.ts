@@ -17,7 +17,7 @@ const PORT = parseInt(process.env.PORT ?? '3001');
 
 connectDB()
   .then(() => {
-    Bun.serve({ port: PORT, fetch: app.fetch });
+    Bun.serve({ port: PORT, fetch: app.fetch, idleTimeout: 120 });
     console.log(`API running on http://localhost:${PORT}`);
   })
   .catch((err) => {
