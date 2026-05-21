@@ -12,8 +12,9 @@ pokemon-battle-system/
 .claude/
 docs/Compact.md
 
-# Documentación en Markdown (toda)
+# Documentación en Markdown (toda excepto el README del proyecto)
 *.md
+!README.md
 
 # Capturas de pantalla y archivos temporales
 *.png
