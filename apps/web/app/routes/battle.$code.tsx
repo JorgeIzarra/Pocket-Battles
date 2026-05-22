@@ -1,9 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useBattleState, type BattlePokemon, type BattleState, type PlayerState } from '../hooks/useBattleState';
+import { useEffect, useRef, useState } from 'react';
+import { useBattleState, type BattlePokemon, type BattleState, type PlayerState, type LogEntry, type TurnData } from '../hooks/useBattleState';
 import { sendAction } from '../lib/api';
 import { BattleLog, CreatureSprite, HealthBar, HPBox, MoveButton, PixelFrame, Platform, TitleBar, TypeBadge } from '../components/shared';
-import { typeColor } from '../lib/types';
 
 export const Route = createFileRoute('/battle/$code')({
   component: BattleScreen,
@@ -15,32 +14,198 @@ const BG = {
   platformColor: 'var(--t-grass)',
 };
 
-function AnimSprite({
-  spriteUrl,
-  name,
-  size,
-  facing,
-  animClass,
-}: {
-  spriteUrl: string;
-  name: string;
-  size: number;
-  facing: 'front' | 'back';
-  animClass: string;
+// ---------- AnimFrame -------------------------------------------------------
+
+interface AnimFrame {
+  logLines: LogEntry[];
+  hpUpdate?: { pokemonId: string; hp: number };
+  activeIndexUpdate?: { playerIdx: number; index: number };
+  myAnim: string;
+  oppAnim: string;
+  waitMs: number;
+}
+
+function applyHpUpdate(state: BattleState, pokemonId: string, hp: number): BattleState {
+  return {
+    ...state,
+    players: state.players.map(player => ({
+      ...player,
+      team: player.team.map(pk =>
+        pk.pokemonId === pokemonId ? { ...pk, currentHp: hp } : pk
+      ),
+    })) as [PlayerState, PlayerState],
+  };
+}
+
+function applyActiveIndex(state: BattleState, playerIdx: number, index: number): BattleState {
+  return {
+    ...state,
+    players: state.players.map((p, i) =>
+      i === playerIdx ? { ...p, activeIndex: index } : p
+    ) as [PlayerState, PlayerState],
+  };
+}
+
+function buildAnimFrames(
+  turnLog: LogEntry[],
+  myPokemonIds: Set<string>,
+  finalState: BattleState,
+): AnimFrame[] {
+  const frames: AnimFrame[] = [];
+  let i = 0;
+
+  while (i < turnLog.length) {
+    const entry = turnLog[i];
+
+    if (entry.actorId && entry.targetId !== undefined && entry.targetHpAfter !== undefined) {
+      // Damaging attack hit
+      const isMyAttack = myPokemonIds.has(entry.actorId);
+
+      const modifiers: LogEntry[] = [];
+      let j = i + 1;
+      while (j < turnLog.length && !turnLog[j].actorId && turnLog[j].targetId === undefined) {
+        modifiers.push(turnLog[j]);
+        j++;
+      }
+
+      frames.push({
+        logLines: [entry],
+        myAnim: isMyAttack ? 'attack-r' : '',
+        oppAnim: isMyAttack ? '' : 'attack-l',
+        waitMs: 480,
+      });
+      frames.push({
+        logLines: modifiers,
+        hpUpdate: { pokemonId: entry.targetId, hp: entry.targetHpAfter },
+        myAnim: isMyAttack ? '' : 'shake flash',
+        oppAnim: isMyAttack ? 'shake flash' : '',
+        waitMs: 620,
+      });
+      i = j;
+
+    } else if (entry.actorId && entry.targetId !== undefined) {
+      // Status move hit (no damage)
+      const isMyAttack = myPokemonIds.has(entry.actorId);
+      const following: LogEntry[] = [];
+      let j = i + 1;
+      while (j < turnLog.length && !turnLog[j].actorId && turnLog[j].targetId === undefined) {
+        following.push(turnLog[j]);
+        j++;
+      }
+      frames.push({
+        logLines: [entry, ...following],
+        myAnim: isMyAttack ? 'attack-r' : '',
+        oppAnim: isMyAttack ? '' : 'attack-l',
+        waitMs: 420,
+      });
+      i = j;
+
+    } else if (entry.actorId && entry.targetId === undefined) {
+      // Switch OR miss
+      const following: LogEntry[] = [];
+      let j = i + 1;
+      while (j < turnLog.length && !turnLog[j].actorId && turnLog[j].targetId === undefined) {
+        following.push(turnLog[j]);
+        j++;
+      }
+
+      if (entry.kind === 'meta') {
+        // Switch — find which player and new index from final state
+        const switchPlayerIdx = finalState.players.findIndex(p =>
+          p.team.some(pk => pk.pokemonId === entry.actorId)
+        );
+        const newIdx = switchPlayerIdx >= 0 ? finalState.players[switchPlayerIdx].activeIndex : 0;
+        frames.push({
+          logLines: [entry, ...following],
+          activeIndexUpdate: switchPlayerIdx >= 0 ? { playerIdx: switchPlayerIdx, index: newIdx } : undefined,
+          myAnim: '',
+          oppAnim: '',
+          waitMs: 450,
+        });
+      } else {
+        // Miss
+        const isMyAttack = myPokemonIds.has(entry.actorId ?? '');
+        frames.push({
+          logLines: [entry, ...following],
+          myAnim: isMyAttack ? 'attack-r' : '',
+          oppAnim: isMyAttack ? '' : 'attack-l',
+          waitMs: 420,
+        });
+      }
+      i = j;
+
+    } else if (!entry.actorId && entry.targetId !== undefined && entry.targetHpAfter !== undefined) {
+      // EOT damage (poison / burn)
+      const isMyTarget = myPokemonIds.has(entry.targetId);
+      frames.push({
+        logLines: [entry],
+        hpUpdate: { pokemonId: entry.targetId, hp: entry.targetHpAfter },
+        myAnim: isMyTarget ? 'shake flash' : '',
+        oppAnim: isMyTarget ? '' : 'shake flash',
+        waitMs: 800,
+      });
+      i++;
+
+    } else {
+      // Plain text (status apply, tick, faint, etc.)
+      frames.push({ logLines: [entry], myAnim: '', oppAnim: '', waitMs: 300 });
+      i++;
+    }
+  }
+
+  return frames;
+}
+
+function runAnimFrames(
+  frames: AnimFrame[],
+  startState: BattleState,
+  startLog: LogEntry[],
+  onFrame: (state: BattleState, log: LogEntry[], myAnim: string, oppAnim: string) => void,
+  onDone: () => void,
+): () => void {
+  let cancelled = false;
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+  let curState = startState;
+  let curLog = startLog;
+  const t0 = performance.now();
+
+  function step(idx: number) {
+    if (cancelled) return;
+    if (idx >= frames.length) {
+      console.log(`[T5] animation ${(performance.now() - t0).toFixed(0)}ms`);
+      onDone();
+      return;
+    }
+    const frame = frames[idx];
+
+    curLog = [...curLog, ...frame.logLines];
+    if (frame.hpUpdate) curState = applyHpUpdate(curState, frame.hpUpdate.pokemonId, frame.hpUpdate.hp);
+    if (frame.activeIndexUpdate) curState = applyActiveIndex(curState, frame.activeIndexUpdate.playerIdx, frame.activeIndexUpdate.index);
+
+    onFrame(curState, curLog, frame.myAnim, frame.oppAnim);
+
+    timerId = setTimeout(() => step(idx + 1), frame.waitMs);
+  }
+
+  step(0);
+  return () => { cancelled = true; if (timerId) clearTimeout(timerId); };
+}
+
+// ---------- AnimSprite -------------------------------------------------------
+
+function AnimSprite({ spriteUrl, name, size, facing, animClass }: {
+  spriteUrl: string; name: string; size: number; facing: 'front' | 'back'; animClass: string;
 }) {
   const [cls, setCls] = useState('');
 
-  // Enter animation on first mount (fires after first paint so no flash)
   useEffect(() => {
     setCls('enter');
     const t = setTimeout(() => setCls(''), 400);
     return () => clearTimeout(t);
   }, []);
 
-  // Sync parent animation class; remove+re-add via RAF to force CSS replay
-  // even when the same class fires two turns in a row
   useEffect(() => {
-    if (!animClass) return;
+    if (!animClass) { setCls(''); return; }
     setCls('');
     const raf = requestAnimationFrame(() => setCls(animClass));
     return () => cancelAnimationFrame(raf);
@@ -53,98 +218,145 @@ function AnimSprite({
   );
 }
 
+// ---------- BattleScreen ----------------------------------------------------
+
 function BattleScreen() {
   const { code } = Route.useParams();
   const navigate = useNavigate();
-  const { state, error } = useBattleState(code);
+  const { latestTurnData, error } = useBattleState(code);
 
   const session = (() => {
     try { return JSON.parse(sessionStorage.getItem(`pb:${code}`) ?? '{}'); } catch { return {}; }
   })();
   const playerId: string = session.playerId ?? '';
 
-  const [phase, setPhase] = useState<'choose' | 'waiting' | 'switch'>('choose');
+  const [phase, setPhase] = useState<'choose' | 'waiting' | 'animating' | 'switch'>('choose');
   const [actionError, setActionError] = useState<string | null>(null);
-  const [lastTurn, setLastTurn] = useState(0);
-
-  // Animation state
   const [myAnimClass, setMyAnimClass] = useState('');
   const [oppAnimClass, setOppAnimClass] = useState('');
-  const prevStateRef = useRef<BattleState | null>(null);
-  const myTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const oppTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [displayState, setDisplayState] = useState<BattleState | null>(null);
+  const [displayLog, setDisplayLog] = useState<LogEntry[]>([]);
 
-  // Reset phase + trigger animations when a turn resolves
-  if (state && state.turn !== lastTurn) {
-    setLastTurn(state.turn);
-    setPhase('choose');
-  }
+  const cancelAnimRef = useRef<(() => void) | null>(null);
+  const finalStateRef = useRef<BattleState | null>(null);
+  const displayStateRef = useRef<BattleState | null>(null);
+  const tabHiddenAtRef = useRef<number | null>(null);
+  const lastTurnRef = useRef(-1);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
-  // Derive which player is "mine" early so we can use it in the layout effect
-  const myIdx = state ? (state.players[0].playerId === playerId ? 0 : 1) : 0;
+  // Keep displayStateRef in sync
+  useEffect(() => { displayStateRef.current = displayState; }, [displayState]);
+
+  // Tab visibility handler
+  useEffect(() => {
+    function onVis() {
+      if (document.visibilityState === 'hidden') {
+        tabHiddenAtRef.current = Date.now();
+      } else if (tabHiddenAtRef.current !== null) {
+        const hiddenMs = Date.now() - tabHiddenAtRef.current;
+        tabHiddenAtRef.current = null;
+        if (phaseRef.current === 'animating' && hiddenMs > 3000 && finalStateRef.current) {
+          cancelAnimRef.current?.();
+          cancelAnimRef.current = null;
+          setDisplayState(finalStateRef.current);
+          setDisplayLog([...finalStateRef.current.battleLog]);
+          setMyAnimClass('');
+          setOppAnimClass('');
+          setPhase('choose');
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
+  // Process incoming turn data
+  useEffect(() => {
+    if (!latestTurnData) return;
+    const { state: finalState, turnLog, firstActorPlayerId } = latestTurnData;
+    finalStateRef.current = finalState;
+
+    // First arrival: show immediately
+    if (lastTurnRef.current === -1) {
+      lastTurnRef.current = finalState.turn;
+      setDisplayState(finalState);
+      setDisplayLog([...finalState.battleLog]);
+      return;
+    }
+
+    // Same turn (duplicate/reconnect): ignore
+    if (finalState.turn === lastTurnRef.current) return;
+    lastTurnRef.current = finalState.turn;
+
+    // Cancel any running animation and get current displayState
+    cancelAnimRef.current?.();
+    cancelAnimRef.current = null;
+
+    const prevDisplayState = displayStateRef.current ?? finalState;
+
+    // Skip animation if tab was hidden too long
+    const hiddenMs = tabHiddenAtRef.current !== null ? Date.now() - tabHiddenAtRef.current : 0;
+    if (document.visibilityState === 'hidden' || hiddenMs > 3000) {
+      setDisplayState(finalState);
+      setDisplayLog([...finalState.battleLog]);
+      setPhase('choose');
+      return;
+    }
+
+    // Build myPokemonIds from prevDisplayState (same team, just need pokemonIds)
+    const myIdx = prevDisplayState.players[0].playerId === playerId ? 0 : 1;
+    const myPokemonIds = new Set(prevDisplayState.players[myIdx].team.map(p => p.pokemonId));
+
+    const frames = buildAnimFrames(turnLog, myPokemonIds, finalState);
+
+    if (frames.length === 0) {
+      setDisplayState(finalState);
+      setDisplayLog([...finalState.battleLog]);
+      setPhase('choose');
+      return;
+    }
+
+    setPhase('animating');
+
+    const prevLog = [...prevDisplayState.battleLog];
+
+    cancelAnimRef.current = runAnimFrames(
+      frames,
+      prevDisplayState,
+      prevLog,
+      (state, log, myAnim, oppAnim) => {
+        setDisplayState(state);
+        setDisplayLog(log);
+        setMyAnimClass(myAnim);
+        setOppAnimClass(oppAnim);
+      },
+      () => {
+        cancelAnimRef.current = null;
+        setDisplayState(finalState);
+        setDisplayLog([...finalState.battleLog]);
+        setMyAnimClass('');
+        setOppAnimClass('');
+        setPhase('choose');
+      },
+    );
+  }, [latestTurnData]);
+
+  // Auto-open switch panel when active faints
+  const myIdx = displayState ? (displayState.players[0].playerId === playerId ? 0 : 1) : 0;
   const oppIdx = 1 - myIdx;
 
-  // Computed before early returns so hooks below can reference them safely
-  const canSwitch = state
-    ? state.players[myIdx].team.some((p, i) => p.currentHp > 0 && i !== state.players[myIdx].activeIndex)
+  const canSwitch = displayState
+    ? displayState.players[myIdx].team.some((p, i) => p.currentHp > 0 && i !== displayState.players[myIdx].activeIndex)
     : false;
-  const myActiveFainted = state
-    ? state.players[myIdx].team[state.players[myIdx].activeIndex].currentHp <= 0
+  const myActiveFainted = displayState
+    ? displayState.players[myIdx].team[displayState.players[myIdx].activeIndex].currentHp <= 0
     : false;
 
-  useLayoutEffect(() => {
-    if (!state) return;
-    const prev = prevStateRef.current;
-    prevStateRef.current = state;
-    if (!prev || state.turn === prev.turn) return;
-
-    const myPrev = prev.players[myIdx];
-    const oppPrev = prev.players[oppIdx];
-    const myCurr = state.players[myIdx];
-    const oppCurr = state.players[oppIdx];
-
-    const myPrevActive = myPrev.team[myPrev.activeIndex];
-    const oppPrevActive = oppPrev.team[oppPrev.activeIndex];
-    const myCurrActive = myCurr.team[myCurr.activeIndex];
-    const oppCurrActive = oppCurr.team[oppCurr.activeIndex];
-
-    const myTookDamage = myCurrActive.pokemonId === myPrevActive.pokemonId &&
-      myCurrActive.currentHp < myPrevActive.currentHp;
-    const oppTookDamage = oppCurrActive.pokemonId === oppPrevActive.pokemonId &&
-      oppCurrActive.currentHp < oppPrevActive.currentHp;
-
-    // Clear any pending timeouts from the previous turn
-    if (myTimeoutRef.current) clearTimeout(myTimeoutRef.current);
-    if (oppTimeoutRef.current) clearTimeout(oppTimeoutRef.current);
-
-    if (myTookDamage && oppTookDamage) {
-      setMyAnimClass('shake flash');
-      setOppAnimClass('shake flash');
-      // Reset to '' after animation so next turn sees a real state change
-      myTimeoutRef.current = setTimeout(() => setMyAnimClass(''), 560);
-      oppTimeoutRef.current = setTimeout(() => setOppAnimClass(''), 560);
-    } else if (oppTookDamage) {
-      setMyAnimClass('attack-r');
-      myTimeoutRef.current = setTimeout(() => setMyAnimClass(''), 300);
-      oppTimeoutRef.current = setTimeout(() => {
-        setOppAnimClass('shake flash');
-        oppTimeoutRef.current = setTimeout(() => setOppAnimClass(''), 560);
-      }, 480);
-    } else if (myTookDamage) {
-      setOppAnimClass('attack-l');
-      oppTimeoutRef.current = setTimeout(() => setOppAnimClass(''), 300);
-      myTimeoutRef.current = setTimeout(() => {
-        setMyAnimClass('shake flash');
-        myTimeoutRef.current = setTimeout(() => setMyAnimClass(''), 560);
-      }, 480);
-    }
-  }, [state, myIdx, oppIdx]);
-
-  // Auto-open switch panel when the player's active faints
   useEffect(() => {
-    if (!state || state.status === 'finished') return;
+    if (!displayState || displayState.status === 'finished') return;
     if (myActiveFainted && canSwitch && phase === 'choose') setPhase('switch');
-  }, [myActiveFainted, canSwitch, phase, state?.status]);
+  }, [myActiveFainted, canSwitch, phase, displayState?.status]);
 
   if (error) {
     return (
@@ -160,7 +372,7 @@ function BattleScreen() {
     );
   }
 
-  if (!state) {
+  if (!displayState) {
     return (
       <>
         <TitleBar step={4} />
@@ -171,24 +383,24 @@ function BattleScreen() {
     );
   }
 
-  const myPlayerState: PlayerState = state.players[myIdx];
-  const oppPlayerState: PlayerState = state.players[oppIdx];
-
+  const myPlayerState: PlayerState = displayState.players[myIdx];
+  const oppPlayerState: PlayerState = displayState.players[oppIdx];
   const myActive: BattlePokemon = myPlayerState.team[myPlayerState.activeIndex];
   const oppActive: BattlePokemon = oppPlayerState.team[oppPlayerState.activeIndex];
 
   const myEffectiveClass = myActive.currentHp === 0 ? 'faint' : myAnimClass;
   const oppEffectiveClass = oppActive.currentHp === 0 ? 'faint' : oppAnimClass;
 
+  const myBackIsFallback = myActive.spriteBackUrl === myActive.spriteFrontUrl;
+
+  const isAnimating = phase === 'animating';
+
   async function handleMove(moveId: string) {
     if (phase !== 'choose') return;
     setPhase('waiting');
     setActionError(null);
     try {
-      const result = await sendAction(code, playerId, { type: 'move', moveId });
-      if (result.status === 'resolved') {
-        // State will update via SSE, phase reset there
-      }
+      await sendAction(code, playerId, { type: 'move', moveId });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Error');
       setPhase('choose');
@@ -212,11 +424,10 @@ function BattleScreen() {
       <TitleBar step={4} />
       <div className="screen" data-screen-label="04 Batalla">
         <div style={{ flex: 1, display: 'grid', gridTemplateRows: '1fr 280px', gap: 0 }}>
+
           {/* STAGE */}
           <div style={{ position: 'relative', overflow: 'hidden', background: BG.sky, borderBottom: '4px solid var(--line)' }}>
-            {/* Floor */}
             <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '44%', background: BG.floor, opacity: 0.85 }} />
-            {/* Scanline */}
             <div style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg, rgba(0,0,0,0.04) 0 2px, transparent 2px 4px)', pointerEvents: 'none', mixBlendMode: 'multiply' }} />
 
             {/* OPPONENT HP box — top left */}
@@ -242,7 +453,7 @@ function BattleScreen() {
             {/* PLAYER sprite — bottom left */}
             <div style={{ position: 'absolute', bottom: 28, left: 90, width: 240, height: 220, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
               <Platform width={260} color={BG.platformColor} style={{ left: -10 }} />
-              <div style={{ position: 'relative', zIndex: 2 }}>
+              <div style={{ position: 'relative', zIndex: 2, transform: myBackIsFallback ? 'scaleX(-1)' : 'none' }}>
                 <AnimSprite
                   key={myActive.pokemonId}
                   spriteUrl={myActive.spriteBackUrl}
@@ -259,18 +470,14 @@ function BattleScreen() {
               <HPBox pokemon={myActive} showNumbers />
             </div>
 
-            {/* Name tags */}
             <NameTag label={`${oppPlayerState.name.toUpperCase()} · RIVAL`} style={{ position: 'absolute', top: 8, right: 16 }} color="var(--accent-2)" />
             <NameTag label={`${myPlayerState.name.toUpperCase()} · TÚ`} style={{ position: 'absolute', bottom: 6, left: 16 }} color="var(--accent)" />
-
-            {/* Team dots */}
             <TeamDots team={oppPlayerState.team} style={{ position: 'absolute', top: 32, right: 16 }} label="RIVAL" />
             <TeamDots team={myPlayerState.team} style={{ position: 'absolute', bottom: 6, right: 120 }} label="EQUIPO" />
 
-            {/* End overlay */}
-            {state.status === 'finished' && (
+            {displayState.status === 'finished' && (
               <EndOverlay
-                won={state.winnerPlayerId === playerId}
+                won={displayState.winnerPlayerId === playerId}
                 myName={myPlayerState.name}
                 oppName={oppPlayerState.name}
                 onExit={() => navigate({ to: '/' })}
@@ -279,25 +486,33 @@ function BattleScreen() {
           </div>
 
           {/* BOTTOM PANEL */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 480px', gap: 10, padding: 10, background: 'var(--bg-deep)' }}>
-            {/* LOG */}
-            <PixelFrame style={{ overflow: 'hidden', minHeight: 0 }}>
-              <BattleLog lines={state.battleLog} />
-            </PixelFrame>
+          <div style={{ display: 'grid', gridTemplateColumns: phase === 'switch' ? '1fr' : 'minmax(0, 1fr) 480px', gap: 10, padding: 10, background: 'var(--bg-deep)' }}>
+            {phase !== 'switch' && (
+              <PixelFrame style={{ overflow: 'hidden', minHeight: 0 }}>
+                <BattleLog lines={displayLog} />
+              </PixelFrame>
+            )}
 
-            {/* ACTIONS */}
             <PixelFrame style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0 }}>
               {actionError && (
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--bad)' }}>⚠ {actionError}</div>
               )}
               {phase === 'switch' ? (
-                <SwitchPanel
-                  team={myPlayerState.team}
-                  active={myPlayerState.activeIndex}
-                  onPick={handleSwitch}
-                  onCancel={() => setPhase('choose')}
-                  mandatory={myActive.currentHp === 0}
-                />
+                <>
+                  {displayLog.length > 0 && (
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--ink-mute)', borderBottom: '2px solid var(--line-soft)', paddingBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {displayLog[displayLog.length - 1].text}
+                    </div>
+                  )}
+                  <SwitchPanel
+                    team={myPlayerState.team}
+                    active={myPlayerState.activeIndex}
+                    onPick={handleSwitch}
+                    onCancel={() => setPhase('choose')}
+                    mandatory={myActive.currentHp === 0}
+                    fullWidth
+                  />
+                </>
               ) : (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 8, flex: 1, minHeight: 0 }}>
@@ -305,7 +520,7 @@ function BattleScreen() {
                       <MoveButton
                         key={i}
                         move={myActive.moves[i]}
-                        disabled={phase !== 'choose' || state.status === 'finished' || myActive.currentHp === 0}
+                        disabled={isAnimating || phase !== 'choose' || displayState.status === 'finished' || myActive.currentHp === 0}
                         onClick={() => myActive.moves[i] && handleMove(myActive.moves[i].moveId)}
                       />
                     ))}
@@ -314,10 +529,13 @@ function BattleScreen() {
                     {phase === 'waiting' && (
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: 16, color: 'var(--ink-mute)' }}>Esperando al rival…</span>
                     )}
-                    <button className="btn btn--block" onClick={() => setPhase('switch')} disabled={phase !== 'choose' || !canSwitch || state.status === 'finished'}>
+                    {isAnimating && (
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: 16, color: 'var(--ink-mute)' }}>…</span>
+                    )}
+                    <button className="btn btn--block" onClick={() => setPhase('switch')} disabled={isAnimating || phase !== 'choose' || !canSwitch || displayState.status === 'finished'}>
                       ⇄ CAMBIAR
                     </button>
-                    <button className="btn btn--block" onClick={() => navigate({ to: '/' })} disabled={state.status !== 'finished'}>
+                    <button className="btn btn--block" onClick={() => navigate({ to: '/' })} disabled={displayState.status !== 'finished'}>
                       ✕ SALIR
                     </button>
                   </div>
@@ -330,6 +548,8 @@ function BattleScreen() {
     </>
   );
 }
+
+// ---------- Helpers ---------------------------------------------------------
 
 function NameTag({ label, color, style }: { label: string; color: string; style: React.CSSProperties }) {
   return (
@@ -350,7 +570,10 @@ function TeamDots({ team, style, label }: { team: BattlePokemon[]; style: React.
   );
 }
 
-function SwitchPanel({ team, active, onPick, onCancel, mandatory }: { team: BattlePokemon[]; active: number; onPick: (i: number) => void; onCancel: () => void; mandatory: boolean }) {
+function SwitchPanel({ team, active, onPick, onCancel, mandatory, fullWidth }: {
+  team: BattlePokemon[]; active: number; onPick: (i: number) => void;
+  onCancel: () => void; mandatory: boolean; fullWidth?: boolean;
+}) {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -362,7 +585,7 @@ function SwitchPanel({ team, active, onPick, onCancel, mandatory }: { team: Batt
           Tu Pokémon se debilitó. Elige un reemplazo.
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: fullWidth ? 'repeat(3, 1fr)' : '1fr 1fr', gap: 6 }}>
         {team.map((p, i) => {
           const fainted = p.currentHp <= 0;
           const isActive = i === active;

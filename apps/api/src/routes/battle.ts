@@ -48,7 +48,7 @@ battle.get('/:code/stream', async (c) => {
     start(ctrl) {
       clientCtrl = ctrl;
       battleService.addSSEClient(code, ctrl);
-      ctrl.enqueue(enc.encode(`data: ${JSON.stringify(initialState)}\n\n`));
+      ctrl.enqueue(enc.encode(`data: ${JSON.stringify({ state: initialState, turnLog: [], firstActorPlayerId: null })}\n\n`));
 
       // Ping every 15 s so Bun doesn't close the idle connection between turns
       keepaliveInterval = setInterval(() => {

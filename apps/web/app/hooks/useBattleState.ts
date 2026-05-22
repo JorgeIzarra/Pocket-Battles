@@ -43,6 +43,9 @@ export interface PlayerState {
 export interface LogEntry {
   text: string;
   kind: 'meta' | 'super' | 'weak' | 'crit' | 'normal';
+  actorId?: string;
+  targetId?: string;
+  targetHpAfter?: number;
 }
 
 export interface BattleState {
@@ -54,8 +57,14 @@ export interface BattleState {
   winnerPlayerId: string | null;
 }
 
+export interface TurnData {
+  state: BattleState;
+  turnLog: LogEntry[];
+  firstActorPlayerId: string | null;
+}
+
 export function useBattleState(code: string) {
-  const [state, setState] = useState<BattleState | null>(null);
+  const [latestTurnData, setLatestTurnData] = useState<TurnData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
@@ -66,7 +75,8 @@ export function useBattleState(code: string) {
 
     es.onmessage = (e) => {
       try {
-        setState(JSON.parse(e.data) as BattleState);
+        const payload = JSON.parse(e.data) as TurnData;
+        setLatestTurnData(payload);
       } catch {
         // ignore malformed frames
       }
@@ -83,5 +93,5 @@ export function useBattleState(code: string) {
     };
   }, [code]);
 
-  return { state, error };
+  return { latestTurnData, error };
 }

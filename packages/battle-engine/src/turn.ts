@@ -43,7 +43,7 @@ function applySwitch(state: BattleState, action: PlayerAction, log: LogEntry[]):
   clearStatusAndStages(leaving);
   player.activeIndex = action.switchToIndex!;
   const entering = player.team[player.activeIndex];
-  log.push({ text: `¡Adelante, ${entering.name}!`, kind: 'meta' });
+  log.push({ text: `¡Adelante, ${entering.name}!`, kind: 'meta', actorId: entering.pokemonId });
 }
 
 function applyMove(
@@ -57,7 +57,8 @@ function applyMove(
   if (attacker.currentHp <= 0) return;
 
   const move = attacker.moves.find(m => m.moveId === action.moveId)!;
-  log.push({ text: `${attacker.name} usó ${move.name}.`, kind: 'normal' });
+  const useEntry: LogEntry = { text: `${attacker.name} usó ${move.name}.`, kind: 'normal', actorId: attacker.pokemonId };
+  log.push(useEntry);
 
   const result = calcDamage(attacker, defender, move, state.typeChart, rng);
 
@@ -66,8 +67,11 @@ function applyMove(
     return;
   }
 
+  useEntry.targetId = defender.pokemonId;
+
   if (result.damage > 0) {
     defender.currentHp = Math.max(0, defender.currentHp - result.damage);
+    useEntry.targetHpAfter = defender.currentHp;
     if (result.crit) log.push({ text: '¡Un golpe crítico!', kind: 'crit' });
     if (result.effectiveness === 'super')
       log.push({ text: '¡Es supereficaz!', kind: 'super' });

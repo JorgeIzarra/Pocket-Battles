@@ -59,6 +59,10 @@ export type LogKind = 'meta' | 'super' | 'weak' | 'crit' | 'normal';
 export interface LogEntry {
   text: string;
   kind: LogKind;
+  // Animation hints — optional, never affect battle logic
+  actorId?: string;       // pokemonId of attacker ("usó") or entering switcher ("¡Adelante!")
+  targetId?: string;      // pokemonId of target; set on attack hit and EOT damage
+  targetHpAfter?: number; // target's HP after this event; drives sequential HP bar animation
 }
 
 export type TypeChart = Record<string, Record<string, number>>;

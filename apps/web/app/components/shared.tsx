@@ -139,7 +139,7 @@ export function CreatureSprite({ spriteUrl, name, size = 160, facing = 'front', 
       className={className}
       style={{
         imageRendering: 'pixelated',
-        transform: facing === 'back' ? 'scaleX(-1)' : 'none',
+        transform: 'none',
         filter: 'drop-shadow(2px 3px 0 rgba(0,0,0,0.18))',
         objectFit: 'contain',
         ...style,

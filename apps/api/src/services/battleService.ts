@@ -1,6 +1,14 @@
 import { Battle } from '../models/Battle';
 import { resolveTurn as engineResolveTurn, realRng } from '@pocket-battles/battle-engine';
-import type { BattleState, PlayerAction } from '@pocket-battles/battle-engine';
+import type { BattleState, PlayerAction, LogEntry } from '@pocket-battles/battle-engine';
+
+// --- SSE types ---
+
+export interface SSEPayload {
+  state: BattleState;
+  turnLog: LogEntry[];
+  firstActorPlayerId: string | null;
+}
 
 // --- SSE registry ---
 
@@ -17,10 +25,10 @@ export function removeSSEClient(code: string, ctrl: SSECtrl): void {
   sseClients.get(code)?.delete(ctrl);
 }
 
-function broadcastSSE(code: string, state: BattleState): void {
+function broadcastSSE(code: string, payload: SSEPayload): void {
   const clients = sseClients.get(code);
   if (!clients || clients.size === 0) return;
-  const msg = encoder.encode(`data: ${JSON.stringify(state)}\n\n`);
+  const msg = encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
   for (const ctrl of [...clients]) {
     try {
       ctrl.enqueue(msg);
@@ -107,13 +115,18 @@ async function resolveTurnDB(code: string): Promise<BattleState> {
   const battleState = doc as unknown as BattleState;
   const [a, b] = (doc as any).pendingActions as [PlayerAction, PlayerAction];
 
-  const { state: newState } = engineResolveTurn(battleState, a, b, realRng);
+  const { state: newState, log } = engineResolveTurn(battleState, a, b, realRng);
+
+  const firstActorPokemonId = log.find(e => e.actorId)?.actorId ?? null;
+  const firstActorPlayerId = firstActorPokemonId
+    ? (newState.players.find(p => p.team.some(pk => pk.pokemonId === firstActorPokemonId))?.playerId ?? null)
+    : null;
 
   await Battle.replaceOne(
     { roomCode: code },
     { ...newState, pendingActions: [] },
   );
 
-  broadcastSSE(code, newState);
+  broadcastSSE(code, { state: newState, turnLog: log, firstActorPlayerId });
   return newState;
 }

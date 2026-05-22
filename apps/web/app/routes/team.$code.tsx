@@ -34,6 +34,8 @@ function TeamSelectScreen() {
   const [filterType, setFilterType] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [waitingTimedOut, setWaitingTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Load full catalog (paginate until done)
@@ -95,11 +97,12 @@ function TeamSelectScreen() {
   const teamValid = team.length >= 1 && team.every(e => e.moveIds.length === 4);
 
   async function handleReady() {
-    if (!teamValid || submitting) return;
+    if (!teamValid || submitting || waiting) return;
     setSubmitting(true);
     setError(null);
     try {
       await submitTeam(code, playerId, team.map(e => ({ pokemonId: e.pokemon._id, moveIds: e.moveIds })));
+      setSubmitting(false);
 
       // Try to start battle immediately (succeeds if rival already submitted)
       let started = false;
@@ -110,18 +113,26 @@ function TeamSelectScreen() {
         // Rival hasn't submitted yet — wait for them
       }
 
-      if (!started) {
-        // Poll room state until the rival triggers startBattle and the battle exists
-        let attempts = 0;
-        while (attempts < 60) {
-          await new Promise(r => setTimeout(r, 1500));
-          const room = await getRoomState(code);
-          if (room.status === 'in_battle') break;
-          attempts++;
-        }
+      if (started) {
+        navigate({ to: '/battle/$code', params: { code } });
+        return;
       }
 
-      navigate({ to: '/battle/$code', params: { code } });
+      // Poll until rival submits their team and starts the battle (max 90s)
+      setWaiting(true);
+      let attempts = 0;
+      while (attempts < 60) {
+        await new Promise(r => setTimeout(r, 1500));
+        const room = await getRoomState(code);
+        if (room.status === 'in_battle') {
+          navigate({ to: '/battle/$code', params: { code } });
+          return;
+        }
+        attempts++;
+      }
+      // Rival never responded
+      setWaiting(false);
+      setWaitingTimedOut(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al enviar el equipo');
       setSubmitting(false);
@@ -132,6 +143,34 @@ function TeamSelectScreen() {
     <>
       <TitleBar step={3} />
       <div className="screen" data-screen-label="03 Seleccion de equipo">
+        {/* Waiting overlay */}
+        {waiting && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'dialogIn 320ms ease-out' }}>
+            <PixelFrame style={{ padding: '36px 48px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {[0, 1, 2].map(i => (
+                  <span key={i} style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block', animation: `pulse 900ms ${i * 200}ms ease-in-out infinite` }} />
+                ))}
+              </div>
+              <div style={{ fontFamily: 'var(--font-label)', fontSize: 20, letterSpacing: 1, color: 'var(--ink)' }}>Esperando al rival…</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: 16, color: 'var(--ink-mute)' }}>El rival está armando su equipo</div>
+            </PixelFrame>
+          </div>
+        )}
+        {/* Timeout overlay */}
+        {waitingTimedOut && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'dialogIn 320ms ease-out' }}>
+            <PixelFrame style={{ padding: '36px 48px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              <div style={{ fontFamily: 'var(--font-label)', fontSize: 22, color: 'var(--bad)' }}>EL RIVAL NO RESPONDIÓ</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: 17, color: 'var(--ink-soft)' }}>
+                El rival no envió su equipo a tiempo.<br />¿Quieres volver al lobby?
+              </div>
+              <button className="btn btn--primary btn--lg" onClick={() => navigate({ to: '/lobby/$code', params: { code } })}>
+                VOLVER AL LOBBY
+              </button>
+            </PixelFrame>
+          </div>
+        )}
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 326px', gridTemplateRows: 'auto 1fr auto', gap: 12, padding: '14px 18px 18px', minHeight: 0 }}>
           {/* HEADER */}
           <div style={{ gridColumn: '1 / -1' }} className="row">

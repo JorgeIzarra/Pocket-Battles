@@ -32,6 +32,8 @@ export function applyEndOfTurnStatusDamage(
     log.push({
       text: `${pokemon.name} sufre daño por ${kind === 'poison' ? 'veneno' : 'quemadura'}.`,
       kind: 'normal',
+      targetId: pokemon.pokemonId,
+      targetHpAfter: pokemon.currentHp,
     });
   }
 }
