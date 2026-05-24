@@ -88,9 +88,9 @@ function LobbyScreen() {
 
             {/* Players */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'stretch', gap: 14 }}>
-              <PlayerSlot name={p1?.name ?? playerName} role="ANFITRIÓN" filled={!!p1} ready={!!p1} />
+              <PlayerSlot name={p1?.name ?? playerName} role="ANFITRIÓN" filled={!!p1} ready={!!p1} avatarId={p1?.avatarId ?? null} />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-label)', fontSize: 36, letterSpacing: 2, color: 'var(--ink-mute)' }}>VS</div>
-              <PlayerSlot name={p2?.name ?? ''} role="INVITADO" filled={!!p2} ready={!!p2} />
+              <PlayerSlot name={p2?.name ?? ''} role="INVITADO" filled={!!p2} ready={!!p2} avatarId={p2?.avatarId ?? null} />
             </div>
           </div>
 
@@ -118,7 +118,9 @@ function LobbyScreen() {
   );
 }
 
-function PlayerSlot({ name, role, filled, ready }: { name: string; role: string; filled: boolean; ready: boolean }) {
+function PlayerSlot({ name, role, filled, ready, avatarId }: {
+  name: string; role: string; filled: boolean; ready: boolean; avatarId: string | null;
+}) {
   return (
     <PixelFrame variant={filled ? undefined : 'sunk'} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8, opacity: filled ? 1 : 0.95 }}>
       <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -131,7 +133,18 @@ function PlayerSlot({ name, role, filled, ready }: { name: string; role: string;
       <div style={{ position: 'relative', flex: 1, minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-sunk)', border: '3px dashed var(--line-soft)', borderRadius: 12, overflow: 'hidden' }}>
         {filled ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <TrainerSilhouette type={role === 'ANFITRIÓN' ? 'host' : 'guest'} />
+            {avatarId ? (
+              <img
+                src={`/avatars/${avatarId}.png`}
+                alt=""
+                width={100}
+                height={100}
+                style={{ imageRendering: 'pixelated', display: 'block' }}
+                draggable={false}
+              />
+            ) : (
+              <TrainerSilhouette type={role === 'ANFITRIÓN' ? 'host' : 'guest'} />
+            )}
             <span style={{ fontFamily: 'var(--font-label)', fontSize: 22, letterSpacing: 1, color: 'var(--ink)' }}>{name}</span>
           </div>
         ) : (

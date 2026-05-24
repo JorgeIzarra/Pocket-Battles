@@ -9,11 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SelectAvatarRouteImport } from './routes/select-avatar'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TeamCodeRouteImport } from './routes/team.$code'
 import { Route as LobbyCodeRouteImport } from './routes/lobby.$code'
 import { Route as BattleCodeRouteImport } from './routes/battle.$code'
 
+const SelectAvatarRoute = SelectAvatarRouteImport.update({
+  id: '/select-avatar',
+  path: '/select-avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -37,12 +43,14 @@ const BattleCodeRoute = BattleCodeRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/select-avatar': typeof SelectAvatarRoute
   '/battle/$code': typeof BattleCodeRoute
   '/lobby/$code': typeof LobbyCodeRoute
   '/team/$code': typeof TeamCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/select-avatar': typeof SelectAvatarRoute
   '/battle/$code': typeof BattleCodeRoute
   '/lobby/$code': typeof LobbyCodeRoute
   '/team/$code': typeof TeamCodeRoute
@@ -50,20 +58,33 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/select-avatar': typeof SelectAvatarRoute
   '/battle/$code': typeof BattleCodeRoute
   '/lobby/$code': typeof LobbyCodeRoute
   '/team/$code': typeof TeamCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/battle/$code' | '/lobby/$code' | '/team/$code'
+  fullPaths:
+    | '/'
+    | '/select-avatar'
+    | '/battle/$code'
+    | '/lobby/$code'
+    | '/team/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/battle/$code' | '/lobby/$code' | '/team/$code'
-  id: '__root__' | '/' | '/battle/$code' | '/lobby/$code' | '/team/$code'
+  to: '/' | '/select-avatar' | '/battle/$code' | '/lobby/$code' | '/team/$code'
+  id:
+    | '__root__'
+    | '/'
+    | '/select-avatar'
+    | '/battle/$code'
+    | '/lobby/$code'
+    | '/team/$code'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SelectAvatarRoute: typeof SelectAvatarRoute
   BattleCodeRoute: typeof BattleCodeRoute
   LobbyCodeRoute: typeof LobbyCodeRoute
   TeamCodeRoute: typeof TeamCodeRoute
@@ -71,6 +92,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/select-avatar': {
+      id: '/select-avatar'
+      path: '/select-avatar'
+      fullPath: '/select-avatar'
+      preLoaderRoute: typeof SelectAvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -104,6 +132,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SelectAvatarRoute: SelectAvatarRoute,
   BattleCodeRoute: BattleCodeRoute,
   LobbyCodeRoute: LobbyCodeRoute,
   TeamCodeRoute: TeamCodeRoute,

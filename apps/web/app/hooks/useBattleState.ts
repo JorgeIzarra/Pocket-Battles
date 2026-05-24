@@ -38,6 +38,7 @@ export interface PlayerState {
   name: string;
   team: BattlePokemon[];
   activeIndex: number;
+  avatarId?: string | null;
 }
 
 export interface LogEntry {

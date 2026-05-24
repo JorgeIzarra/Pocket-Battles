@@ -16,6 +16,8 @@ Proyecto individual — Curso: Desarrollo de Software.
 | Infraestructura | Docker Compose |
 | Motor de batalla | `@pocket-battles/battle-engine` (paquete interno, TS puro) |
 
+> **Nota (Dockerfile):** `apps/web` usa `node:22-slim` en lugar de `oven/bun` porque Vite recomienda Node para el build de producción estático (`vite build`). La API sigue corriendo en Bun como exige el stack del enunciado.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Navegador (dos tabs / dos máquinas)                            │

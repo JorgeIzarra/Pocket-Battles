@@ -470,8 +470,8 @@ function BattleScreen() {
               <HPBox pokemon={myActive} showNumbers />
             </div>
 
-            <NameTag label={`${oppPlayerState.name.toUpperCase()} · RIVAL`} style={{ position: 'absolute', top: 8, right: 16 }} color="var(--accent-2)" />
-            <NameTag label={`${myPlayerState.name.toUpperCase()} · TÚ`} style={{ position: 'absolute', bottom: 6, left: 16 }} color="var(--accent)" />
+            <NameTag label={`${oppPlayerState.name.toUpperCase()} · RIVAL`} style={{ position: 'absolute', top: 8, right: 16 }} color="var(--accent-2)" avatarId={oppPlayerState.avatarId ?? null} />
+            <NameTag label={`${myPlayerState.name.toUpperCase()} · TÚ`} style={{ position: 'absolute', bottom: 6, left: 16 }} color="var(--accent)" avatarId={myPlayerState.avatarId ?? null} />
             <TeamDots team={oppPlayerState.team} style={{ position: 'absolute', top: 32, right: 16 }} label="RIVAL" />
             <TeamDots team={myPlayerState.team} style={{ position: 'absolute', bottom: 6, right: 120 }} label="EQUIPO" />
 
@@ -551,10 +551,24 @@ function BattleScreen() {
 
 // ---------- Helpers ---------------------------------------------------------
 
-function NameTag({ label, color, style }: { label: string; color: string; style: React.CSSProperties }) {
+function NameTag({ label, color, avatarId, style }: {
+  label: string; color: string; avatarId?: string | null; style: React.CSSProperties;
+}) {
   return (
-    <span style={{ fontFamily: 'var(--font-label)', fontSize: 10, letterSpacing: 1, color: '#fff', background: color, padding: '3px 8px 2px', border: '2px solid var(--line)', borderRadius: 6, textShadow: '1px 1px 0 rgba(0,0,0,0.4)', ...style }}>
-      {label}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: color, padding: '2px 8px 2px 4px', border: '2px solid var(--line)', borderRadius: 6, ...style }}>
+      {avatarId && (
+        <img
+          src={`/avatars/${avatarId}.png`}
+          alt=""
+          width={18}
+          height={18}
+          style={{ imageRendering: 'pixelated', display: 'block', flexShrink: 0 }}
+          draggable={false}
+        />
+      )}
+      <span style={{ fontFamily: 'var(--font-label)', fontSize: 10, letterSpacing: 1, color: '#fff', textShadow: '1px 1px 0 rgba(0,0,0,0.4)' }}>
+        {label}
+      </span>
     </span>
   );
 }
