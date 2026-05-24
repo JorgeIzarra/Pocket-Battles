@@ -28,18 +28,18 @@ async function uniqueCode(): Promise<string> {
 
 // --- Public API ---
 
-export async function createRoom(playerName: string) {
+export async function createRoom(playerName: string, clerkUserId?: string | null, avatarId?: string | null) {
   const code = await uniqueCode();
   const playerId = crypto.randomUUID();
   await Room.create({
     code,
     status: 'waiting',
-    players: [{ playerId, name: playerName, ready: false, pendingTeam: null }],
+    players: [{ playerId, name: playerName, clerkUserId: clerkUserId ?? null, avatarId: avatarId ?? null, ready: false, pendingTeam: null }],
   });
   return { code, playerId };
 }
 
-export async function joinRoom(code: string, playerName: string) {
+export async function joinRoom(code: string, playerName: string, clerkUserId?: string | null, avatarId?: string | null) {
   const room = await Room.findOne({ code });
   if (!room) throw new Error('Sala no encontrada');
   const players = room.players as unknown as any[];
@@ -47,7 +47,7 @@ export async function joinRoom(code: string, playerName: string) {
   if (players.length >= 2) throw new Error('La sala está llena');
 
   const playerId = crypto.randomUUID();
-  players.push({ playerId, name: playerName, ready: false, pendingTeam: null });
+  players.push({ playerId, name: playerName, clerkUserId: clerkUserId ?? null, avatarId: avatarId ?? null, ready: false, pendingTeam: null });
   room.status = 'ready';
   await room.save();
   return { playerId };
@@ -60,7 +60,7 @@ export async function getRoomState(code: string) {
   return {
     code: room.code,
     status: room.status,
-    players: players.map(p => ({ name: p.name, ready: p.ready })),
+    players: players.map(p => ({ name: p.name, ready: p.ready, avatarId: p.avatarId ?? null })),
   };
 }
 
@@ -217,7 +217,7 @@ export async function startBattle(code: string): Promise<void> {
       } satisfies BattlePokemon;
     });
 
-    return { playerId: player.playerId, name: player.name, team, activeIndex: 0 };
+    return { playerId: player.playerId, name: player.name, team, activeIndex: 0, avatarId: player.avatarId ?? null };
   });
 
   await Promise.all([

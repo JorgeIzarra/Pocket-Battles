@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react';
 import { createRoom, joinRoom } from '../lib/api';
 import { BrandMark, PixelFrame, TitleBar } from '../components/shared';
 
@@ -9,23 +10,46 @@ export const Route = createFileRoute('/')({
 
 function HomeScreen() {
   const navigate = useNavigate();
-  const [name, setName] = useState('');
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
+
+  const [guestName, setGuestName] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const trimmedName = name.trim();
+  // Redirect authenticated users who haven't chosen an avatar yet
+  useEffect(() => {
+    if (isLoaded && isSignedIn && !user?.publicMetadata?.avatarId) {
+      navigate({ to: '/select-avatar' });
+    }
+  }, [isLoaded, isSignedIn, user?.publicMetadata?.avatarId]);
+
+  // Nombre derivado del perfil de Clerk; fallback robusto para cuentas solo con email
+  const clerkName = user
+    ? (user.fullName ??
+       user.username ??
+       user.primaryEmailAddress?.emailAddress?.split('@')[0] ??
+       'Entrenador')
+    : null;
+
+  // Nombre activo: viene de Clerk si está autenticado, del input si es invitado
+  const playerName = isSignedIn ? (clerkName ?? '') : guestName.trim();
+
   const trimmedCode = code.trim().toUpperCase();
-  const canCreate = trimmedName.length >= 2;
+  const canCreate = playerName.length >= 2;
   const canJoin = canCreate && trimmedCode.length >= 4;
+
+  const avatarId = isSignedIn ? ((user?.publicMetadata?.avatarId as string | undefined) ?? null) : null;
 
   async function handleCreate() {
     if (!canCreate || loading) return;
     setLoading(true);
     setError(null);
     try {
-      const { code: roomCode, playerId } = await createRoom(trimmedName);
-      sessionStorage.setItem(`pb:${roomCode}`, JSON.stringify({ playerId, name: trimmedName }));
+      const token = isSignedIn ? (await getToken() ?? undefined) : undefined;
+      const { code: roomCode, playerId } = await createRoom(playerName, token, avatarId);
+      sessionStorage.setItem(`pb:${roomCode}`, JSON.stringify({ playerId, name: playerName }));
       navigate({ to: '/lobby/$code', params: { code: roomCode } });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al crear la sala');
@@ -39,8 +63,9 @@ function HomeScreen() {
     setLoading(true);
     setError(null);
     try {
-      const { playerId } = await joinRoom(trimmedCode, trimmedName);
-      sessionStorage.setItem(`pb:${trimmedCode}`, JSON.stringify({ playerId, name: trimmedName }));
+      const token = isSignedIn ? (await getToken() ?? undefined) : undefined;
+      const { playerId } = await joinRoom(trimmedCode, playerName, token, avatarId);
+      sessionStorage.setItem(`pb:${trimmedCode}`, JSON.stringify({ playerId, name: playerName }));
       navigate({ to: '/lobby/$code', params: { code: trimmedCode } });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error al unirse a la sala');
@@ -52,13 +77,30 @@ function HomeScreen() {
   return (
     <>
       <TitleBar step={1} />
-      <div className="screen" data-screen-label="01 Inicio">
+      <div className="screen" data-screen-label="01 Inicio" style={{ position: 'relative' }}>
+
+        {/* Botón de sesión — esquina superior derecha */}
+        <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 10 }}>
+          {isLoaded && isSignedIn ? (
+            <UserButton afterSignOutUrl="/" />
+          ) : (
+            <SignInButton mode="modal">
+              <button
+                className="btn btn--secondary"
+                style={{ fontSize: 13, padding: '5px 12px', letterSpacing: 0.5 }}
+              >
+                INICIAR SESIÓN
+              </button>
+            </SignInButton>
+          )}
+        </div>
+
         <div style={{
           flex: 1, display: 'grid',
           gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
           gap: 24, padding: '28px 36px 36px', alignItems: 'stretch',
         }}>
-          {/* LEFT — brand + name */}
+          {/* LEFT — brand + nombre del entrenador */}
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
               <BrandMark size={64} />
@@ -72,25 +114,49 @@ function HomeScreen() {
               </div>
             </div>
 
-            <PixelFrame style={{ padding: 18 }}>
-              <div className="col gap-8">
-                <label className="pixel-label" htmlFor="player-name">Nombre del entrenador</label>
-                <input
-                  id="player-name"
-                  className="pinput"
-                  placeholder="Tu nombre…"
-                  value={name}
-                  onChange={(e) => setName(e.target.value.slice(0, 14))}
-                  maxLength={14}
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                />
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: 16, color: 'var(--ink-mute)', letterSpacing: 0.4 }}>
-                  Sin registro. Solo se usa para esta partida.
-                  <span style={{ float: 'right' }}>{trimmedName.length}/14</span>
+            {/* Modo autenticado: muestra perfil de Clerk */}
+            {isLoaded && isSignedIn ? (
+              <PixelFrame style={{ padding: 18 }}>
+                <div className="col gap-8">
+                  <label className="pixel-label">Entrenador</label>
+                  <div style={{
+                    fontFamily: 'var(--font-label)', fontSize: 24,
+                    color: 'var(--ink)', letterSpacing: 0.5,
+                  }}>
+                    {clerkName}
+                  </div>
+                  {user?.primaryEmailAddress?.emailAddress && (
+                    <div style={{
+                      fontFamily: 'var(--font-body)', fontSize: 15,
+                      color: 'var(--ink-mute)', letterSpacing: 0.3,
+                    }}>
+                      {user.primaryEmailAddress.emailAddress}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </PixelFrame>
+              </PixelFrame>
+            ) : (
+              /* Modo invitado: input de nombre */
+              <PixelFrame style={{ padding: 18 }}>
+                <div className="col gap-8">
+                  <label className="pixel-label" htmlFor="player-name">Nombre del entrenador</label>
+                  <input
+                    id="player-name"
+                    className="pinput"
+                    placeholder="Tu nombre…"
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value.slice(0, 14))}
+                    maxLength={14}
+                    autoFocus={!isSignedIn}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  />
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: 16, color: 'var(--ink-mute)', letterSpacing: 0.4 }}>
+                    Sin registro. Solo se usa para esta partida.
+                    <span style={{ float: 'right' }}>{guestName.trim().length}/14</span>
+                  </div>
+                </div>
+              </PixelFrame>
+            )}
 
             {error && (
               <div style={{ marginTop: 10, fontFamily: 'var(--font-body)', fontSize: 17, color: 'var(--bad)', letterSpacing: 0.3 }}>
@@ -103,9 +169,9 @@ function HomeScreen() {
             </div>
           </div>
 
-          {/* RIGHT — action cards */}
+          {/* RIGHT — tarjetas de acción (sin cambios funcionales) */}
           <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr', gap: 18 }}>
-            {/* CREATE */}
+            {/* CREAR */}
             <PixelFrame style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span className="pixel-label" style={{ color: 'var(--accent)' }}>OPCIÓN A</span>
@@ -120,7 +186,7 @@ function HomeScreen() {
               </button>
             </PixelFrame>
 
-            {/* JOIN */}
+            {/* UNIRSE */}
             <PixelFrame variant="sunk" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span className="pixel-label" style={{ color: 'var(--accent-2)' }}>OPCIÓN B</span>

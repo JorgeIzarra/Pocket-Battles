@@ -1,7 +1,10 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
+import { ClerkProvider } from '@clerk/clerk-react';
 import { useEffect, useState } from 'react';
 import tokensCSS from '../styles/tokens.css?url';
 import componentsCSS from '../styles/components.css?url';
+
+const CLERK_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ?? '';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -38,14 +41,16 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body>
-        <div className="app">
-          <div
-            className="viewport"
-            style={{ transform: `scale(${scale})` }}
-          >
-            <Outlet />
+        <ClerkProvider publishableKey={CLERK_KEY} afterSignOutUrl="/">
+          <div className="app">
+            <div
+              className="viewport"
+              style={{ transform: `scale(${scale})` }}
+            >
+              <Outlet />
+            </div>
           </div>
-        </div>
+        </ClerkProvider>
         <Scripts />
       </body>
     </html>

@@ -1,19 +1,22 @@
 import { Hono } from 'hono';
 import * as roomService from '../services/roomService';
+import { optionalAuth } from '../middleware/auth';
+import type { AppEnv } from '../types';
 
-const rooms = new Hono();
+const rooms = new Hono<AppEnv>();
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : 'Error interno del servidor';
 }
 
 // POST /rooms — crear sala
-rooms.post('/', async (c) => {
+rooms.post('/', optionalAuth, async (c) => {
   try {
-    const body = await c.req.json<{ playerName?: string }>();
+    const body = await c.req.json<{ playerName?: string; avatarId?: string | null }>();
     if (!body.playerName?.trim())
       return c.json({ error: 'playerName es requerido' }, 400);
-    const result = await roomService.createRoom(body.playerName.trim());
+    const clerkUserId = c.get('clerkUserId') ?? null;
+    const result = await roomService.createRoom(body.playerName.trim(), clerkUserId, body.avatarId ?? null);
     return c.json(result, 201);
   } catch (err) {
     return c.json({ error: errMsg(err) }, 400);
@@ -21,14 +24,17 @@ rooms.post('/', async (c) => {
 });
 
 // POST /rooms/:code/join — segundo jugador se une
-rooms.post('/:code/join', async (c) => {
+rooms.post('/:code/join', optionalAuth, async (c) => {
   try {
-    const body = await c.req.json<{ playerName?: string }>();
+    const body = await c.req.json<{ playerName?: string; avatarId?: string | null }>();
     if (!body.playerName?.trim())
       return c.json({ error: 'playerName es requerido' }, 400);
+    const clerkUserId = c.get('clerkUserId') ?? null;
     const result = await roomService.joinRoom(
       c.req.param('code').toUpperCase(),
       body.playerName.trim(),
+      clerkUserId,
+      body.avatarId ?? null,
     );
     return c.json(result);
   } catch (err) {

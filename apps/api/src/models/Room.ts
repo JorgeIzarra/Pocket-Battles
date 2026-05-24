@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 const playerSchema = new mongoose.Schema({
   playerId: String,
   name: String,
+  clerkUserId: { type: String, default: null },
+  avatarId: { type: String, default: null },
   ready: { type: Boolean, default: false },
   pendingTeam: { type: mongoose.Schema.Types.Mixed, default: null },
 });

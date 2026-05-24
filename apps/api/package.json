@@ -8,6 +8,7 @@
     "seed": "bun run src/seed/importPokeApi.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.4.13",
     "@pocket-battles/battle-engine": "workspace:*",
     "hono": "^4.7.0",
     "mongoose": "^8.9.0"

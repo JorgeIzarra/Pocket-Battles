@@ -13,24 +13,40 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 // Rooms
-export function createRoom(playerName: string) {
+export function createRoom(playerName: string, token?: string, avatarId?: string | null) {
   return req<{ code: string; playerId: string }>('/rooms', {
     method: 'POST',
-    body: JSON.stringify({ playerName }),
+    body: JSON.stringify({ playerName, avatarId: avatarId ?? null }),
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
 }
 
-export function joinRoom(code: string, playerName: string) {
+export function joinRoom(code: string, playerName: string, token?: string, avatarId?: string | null) {
   return req<{ playerId: string }>(`/rooms/${code}/join`, {
     method: 'POST',
-    body: JSON.stringify({ playerName }),
+    body: JSON.stringify({ playerName, avatarId: avatarId ?? null }),
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+}
+
+export function getMe(token: string) {
+  return req<{ userId: string; email: string | null }>('/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export function setAvatar(avatarId: string, token: string) {
+  return req<{ ok: boolean }>('/me/avatar', {
+    method: 'POST',
+    body: JSON.stringify({ avatarId }),
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
 export interface RoomState {
   code: string;
   status: 'waiting' | 'ready' | 'in_battle' | 'finished';
-  players: { name: string; ready: boolean }[];
+  players: { name: string; ready: boolean; avatarId: string | null }[];
 }
 
 export function getRoomState(code: string) {
