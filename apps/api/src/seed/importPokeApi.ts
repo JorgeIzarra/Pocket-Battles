@@ -176,6 +176,8 @@ interface RawPokemon {
   baseStats: Record<string, number>;
   spriteFrontUrl: string | null;
   spriteBackUrl: string | null;
+  spriteFrontShinyUrl: string | null;
+  spriteBackShinyUrl: string | null;
   moveNames: string[];
   isLegendary: boolean;
   isMythical: boolean;
@@ -214,6 +216,8 @@ async function fetchAllPokemon(): Promise<RawPokemon[]> {
         baseStats,
         spriteFrontUrl: pk.sprites?.front_default ?? null,
         spriteBackUrl: pk.sprites?.back_default ?? null,
+        spriteFrontShinyUrl: pk.sprites?.front_shiny ?? null,
+        spriteBackShinyUrl: pk.sprites?.back_shiny ?? null,
         moveNames: pk.moves.map((m: any) => m.move.name),
         isLegendary: sp.is_legendary ?? false,
         isMythical: sp.is_mythical ?? false,
@@ -362,6 +366,7 @@ async function main() {
   let savedPokemon = 0;
   let skippedLessThan4 = 0;
   let backFallbackCount = 0;
+  let shinyBackFallbackCount = 0;
   const pokeDocs = [];
 
   for (const p of filtered) {
@@ -396,6 +401,8 @@ async function main() {
       baseStats: p.baseStats,
       spriteFrontUrl: p.spriteFrontUrl!,
       spriteBackUrl: p.spriteBackUrl ?? (++backFallbackCount, p.spriteFrontUrl!),
+      spriteFrontShinyUrl: p.spriteFrontShinyUrl ?? p.spriteFrontUrl!,
+      spriteBackShinyUrl: p.spriteBackShinyUrl ?? (++shinyBackFallbackCount, p.spriteFrontShinyUrl ?? p.spriteFrontUrl!),
       damagingMoveIds,
       statusMoveIds,
       isLegendary: p.isLegendary || p.isMythical,
@@ -413,6 +420,7 @@ async function main() {
   console.log(`  Pokémon guardados:          ${savedPokemon}`);
   console.log(`  Pokémon omitidos (< 4 mov): ${skippedLessThan4}`);
   console.log(`  Back sprite fallback:       ${backFallbackCount} (usan front_default)`);
+  console.log(`  Shiny back fallback:        ${shinyBackFallbackCount} (usan front_shiny)`);
   console.log(`  Movimientos guardados:      ${moveDocs.length}`);
   console.log(`  Tipos en la TypeChart:      ${Object.keys(chart).length}`);
 

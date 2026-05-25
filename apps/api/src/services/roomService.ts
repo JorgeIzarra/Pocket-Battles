@@ -3,6 +3,7 @@ import { Battle } from '../models/Battle';
 import { Pokemon } from '../models/Pokemon';
 import { Move } from '../models/Move';
 import { TypeChart } from '../models/TypeChart';
+import { Subscription } from '../models/Subscription';
 import { calcHp, calcStat } from '@pocket-battles/battle-engine';
 import type { BattlePokemon, BattleMove, StatKey, StatusKind } from '@pocket-battles/battle-engine';
 
@@ -155,11 +156,20 @@ export async function startBattle(code: string): Promise<void> {
     ),
   ];
 
-  const [pokemonDocs, moveDocs, typeChartDoc] = await Promise.all([
+  const clerkUserIds = players
+    .map((p: any) => p.clerkUserId)
+    .filter((id: any): id is string => typeof id === 'string' && id.length > 0);
+
+  const [pokemonDocs, moveDocs, typeChartDoc, subscriptionDocs] = await Promise.all([
     Pokemon.find({ _id: { $in: allPokemonIds } }),
     Move.find({ moveId: { $in: allMoveIds } }),
     TypeChart.findOne({}),
+    clerkUserIds.length > 0
+      ? Subscription.find({ clerkUserId: { $in: clerkUserIds }, status: 'active' })
+      : Promise.resolve([]),
   ]);
+
+  const premiumSet = new Set((subscriptionDocs as any[]).map((s: any) => s.clerkUserId));
 
   if (!typeChartDoc)
     throw new Error('TypeChart no encontrada en la base de datos — ejecuta el seed primero');
@@ -168,6 +178,8 @@ export async function startBattle(code: string): Promise<void> {
   const moveMap = new Map(moveDocs.map(m => [m.moveId as string, m]));
 
   const playerStates = players.map(player => {
+    const isPremium = typeof player.clerkUserId === 'string' && premiumSet.has(player.clerkUserId);
+
     const team: BattlePokemon[] = (player.pendingTeam as TeamEntry[]).map(entry => {
       const pokemon = pokemonMap.get(entry.pokemonId);
       if (!pokemon) throw new Error(`Pokémon '${entry.pokemonId}' no encontrado`);
@@ -198,13 +210,18 @@ export async function startBattle(code: string): Promise<void> {
         };
       });
 
+      const normalFront = (pokemon.spriteFrontUrl as string) ?? '';
+      const normalBack  = (pokemon.spriteBackUrl as string) ?? normalFront;
+      const shinyFront  = (pokemon.spriteFrontShinyUrl as string) || normalFront;
+      const shinyBack   = (pokemon.spriteBackShinyUrl as string) || shinyFront;
+
       return {
         pokemonId: pokemon._id.toString(),
         pokedexId: pokemon.pokedexId as number,
         name: pokemon.name as string,
         types: pokemon.types as string[],
-        spriteFrontUrl: (pokemon.spriteFrontUrl as string) ?? '',
-        spriteBackUrl: (pokemon.spriteBackUrl as string) ?? (pokemon.spriteFrontUrl as string) ?? '',
+        spriteFrontUrl: isPremium ? shinyFront : normalFront,
+        spriteBackUrl:  isPremium ? shinyBack  : normalBack,
         level: 50,
         ivs,
         baseStats: bs as Record<StatKey, number>,

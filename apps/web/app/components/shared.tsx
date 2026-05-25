@@ -253,8 +253,8 @@ export function CreatureCard({ creature, selected, disabled, onClick }: Creature
         fontFamily: 'var(--font-body)', color: 'var(--ink)',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'center', background: 'var(--surface-sunk)', border: '2px solid var(--line-soft)', borderRadius: 6, padding: 4 }}>
-        <CreatureSprite spriteUrl={creature.spriteFrontUrl} name={creature.name} size={64} />
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: `linear-gradient(160deg, ${typeColor(creature.types[0])}22 0%, var(--surface-sunk) 65%)`, border: '2px solid var(--line-soft)', borderRadius: 6, padding: 6 }}>
+        <CreatureSprite spriteUrl={creature.spriteFrontUrl} name={creature.name} size={80} />
       </div>
       <div className="row" style={{ justifyContent: 'space-between', marginTop: 2 }}>
         <span style={{ fontFamily: 'var(--font-label)', fontSize: 11, letterSpacing: 0.5 }}>{creature.name}</span>

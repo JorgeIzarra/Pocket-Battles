@@ -603,6 +603,116 @@ El campo correcto en la nueva API es `sub.items.data[0].current_period_end`.
 
 ---
 
+## DÍA 11 — Sprites shiny + HomeScreen ✅ COMPLETO
+
+**Fecha:** 2026-05-25
+
+### Qué se construyó
+
+#### Modelo y seed (`apps/api`)
+
+| Archivo | Cambio |
+|---|---|
+| `src/models/Pokemon.ts` | +`spriteFrontShinyUrl: String`, +`spriteBackShinyUrl: String` |
+| `src/seed/importPokeApi.ts` | Interfaz `RawPokemon` +2 campos; captura `pk.sprites.front_shiny` / `back_shiny`; fallback a `front_shiny` si `back_shiny` es null; contador `shinyBackFallbackCount` en resumen |
+
+#### startBattle con Premium (`apps/api/src/services/roomService.ts`)
+
+- Importa `Subscription`
+- En `startBattle`, el `Promise.all` añade `Subscription.find({ clerkUserId: { $in: [...] }, status: 'active' })`
+- Construye `premiumSet: Set<string>` con los `clerkUserId` de suscripciones activas
+- Al construir cada `BattlePokemon`: si el jugador es premium, `spriteFrontUrl` y `spriteBackUrl` reciben las URLs shiny (con fallback a las normales si el campo shiny no está aún en DB)
+- El motor **no se toca** — recibe `BattlePokemon` con URLs como strings, sin saber si son shiny
+
+#### Team Select ✨ (`apps/web/app/routes/team.$code.tsx`)
+
+- Usa `useSubscription()` para obtener `isPremium`
+- En cada slot del equipo armado: si `entry` existe e `isPremium`, muestra `✨` (`position: absolute, bottom: 2, left: 4`) — decorativo, comunica "serán shiny en batalla"
+- Rejilla del catálogo: sin cambios
+
+#### HomeScreen reorganizada (`apps/web/app/routes/index.tsx`)
+
+- Eliminado el `<div position: absolute>` que solapaba badge PREMIUM + UserButton con el label "ANFITRIÓN"
+- Columna derecha cambiada de `display: grid, gridTemplateRows: 1fr 1fr` a `display: flex, flexDirection: column`
+- **Session bar** nueva: fila flex-end al tope de la columna derecha — badge PREMIUM (izquierda) + UserButton / INICIAR SESIÓN (derecha), con gap claro
+- Paneles CREAR y UNIRSE usan `flex: 1` para repartir el espacio restante (mismo efecto visual que antes)
+- "ANFITRIÓN" / "INVITADO" permanecen dentro de sus paneles sin interferencia
+
+### Fase auth/pagos: COMPLETA ✅
+
+Los cuatro días de la fase (Días 8–11) están implementados y verificados:
+- Día 8 ✅ Clerk básico (login opcional, modo invitado preservado)
+- Día 9 ✅ Avatares de entrenadores
+- Día 10 ✅ Stripe Premium + fix webhook
+- Día 11 ✅ Sprites shiny + HomeScreen fix
+
+### Verificación final
+
+```bash
+# Seed con imagen Docker actualizada
+docker compose build api
+docker compose run --rm api bun run seed
+
+# Confirmar campos shiny en MongoDB
+docker exec pocket-battles-mongo-1 mongosh pocket_battles --eval \
+  "printjson(db.pokemons.findOne({name:'charizard'},{name:1,spriteFrontShinyUrl:1,spriteBackShinyUrl:1,_id:0}))"
+# → { name: 'charizard', spriteFrontShinyUrl: '...shiny/6.png', spriteBackShinyUrl: '...back/shiny/6.png' }
+```
+
+---
+
+## POST DÍA 11 — Bugs y pulido visual ✅ COMPLETO
+
+**Fecha:** 2026-05-25
+
+### Bugs corregidos
+
+#### Bug 1 — Campos shiny ausentes en MongoDB
+
+**Síntoma:** `spriteFrontShinyUrl` y `spriteBackShinyUrl` no aparecían en los documentos de Pokémon. `GET /me/subscription` devolvía premium pero los sprites en batalla eran normales.
+
+**Causa raíz:** el seed se re-ejecutó con la imagen Docker anterior al Día 11. Los cambios en `importPokeApi.ts` y `Pokemon.ts` existían en disco pero no en el contenedor (imagen sin rebuild).
+
+**Fix:**
+```bash
+docker compose build api          # reconstruir imagen con código nuevo
+docker compose run --rm api bun run seed  # re-poblar con campos shiny
+```
+
+**Verificación:** `spriteFrontShinyUrl` y `spriteBackShinyUrl` presentes en todos los documentos.
+
+#### Bug 2 — Sprite del jugador salía de frente en batalla (premium)
+
+**Síntoma:** el Pokémon del jugador premium aparecía de frente en lugar de de espaldas.
+
+**Causa raíz:** misma que Bug 1. Sin los campos shiny en DB, el fallback en `startBattle` asignaba `normalFront` tanto a `spriteFrontUrl` como a `spriteBackUrl` del jugador premium. El frontend (`battle.$code.tsx:459`) mostraba `spriteBackUrl` que contenía la URL del sprite frontal.
+
+**Fix:** el rebuild del seed resuelve el problema. El código de `roomService.ts` y `battle.$code.tsx` era correcto.
+
+**Verificado:** sprite de espalda shiny (colores alternativos) en batalla para usuario premium ✓
+
+### Pulido visual — Team Select
+
+| Cambio | Archivo | Detalle |
+|---|---|---|
+| Catálogo: 4 columnas fijas con altura uniforme | `team.$code.tsx` | `repeat(4, 1fr)` + `gridAutoRows: '190px'` — todas las tarjetas tienen la misma altura |
+| Panel derecho más amplio | `team.$code.tsx` | `326px → 380px` — más espacio para slots y lista de movimientos |
+| Slots del equipo: 2 columnas | `team.$code.tsx` | `repeat(3, 1fr) → repeat(2, 1fr)` — slots más anchos y cómodos |
+| Borde dorado en slots premium | `team.$code.tsx` | `border: #f0c040` cuando el slot tiene Pokémon e `isPremium` |
+| ✨ más grande y centrado | `team.$code.tsx` | `fontSize: 10 → 16`, centrado horizontalmente en la base del slot |
+| Sprite de catálogo más grande | `shared.tsx` | `64px → 80px` — mejor proporción en el ancho de 4 columnas |
+| Tinte de tipo en fondo de sprite | `shared.tsx` | `linear-gradient` con `typeColor(types[0])` al 13% de opacidad — identidad visual por tipo |
+
+### Estado final verificado
+
+- **Premium en batalla:** Pokémon propio de espaldas en variante shiny ✓
+- **No-premium en batalla:** Pokémon propio de espaldas en variante normal ✓
+- **Team Select premium:** borde dorado + ✨ centrado y visible en cada slot ocupado ✓
+- **Team Select catálogo:** 4 columnas uniformes, tarjetas de 190px con sprites de 80px y fondo por tipo ✓
+- **Sin scroll de página:** todo cabe en viewport 1280×800 ✓
+
+---
+
 ## DÍA 7 — Ensayo de demo (pendiente)
 
 - `docker compose up --build` desde cero en máquina limpia

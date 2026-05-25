@@ -110,32 +110,6 @@ function HomeScreen() {
       <TitleBar step={1} />
       <div className="screen" data-screen-label="01 Inicio" style={{ position: 'relative' }}>
 
-        {/* Botón de sesión + badge Premium — esquina superior derecha */}
-        <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-          {isLoaded && isSignedIn && isPremium && (
-            <span style={{
-              fontFamily: 'var(--font-label)', fontSize: 11, letterSpacing: 1,
-              color: 'var(--accent)', background: 'var(--bg-raised)',
-              border: '1.5px solid var(--accent)', borderRadius: 4,
-              padding: '3px 8px', lineHeight: 1,
-            }}>
-              ✨ PREMIUM
-            </span>
-          )}
-          {isLoaded && isSignedIn ? (
-            <UserButton afterSignOutUrl="/" />
-          ) : (
-            <SignInButton mode="modal">
-              <button
-                className="btn btn--secondary"
-                style={{ fontSize: 13, padding: '5px 12px', letterSpacing: 0.5 }}
-              >
-                INICIAR SESIÓN
-              </button>
-            </SignInButton>
-          )}
-        </div>
-
         {/* Toast de bienvenida Premium */}
         {premiumToast && (
           <div style={{
@@ -233,10 +207,36 @@ function HomeScreen() {
             </div>
           </div>
 
-          {/* RIGHT — tarjetas de acción (sin cambios funcionales) */}
-          <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr', gap: 18 }}>
+          {/* RIGHT — session bar + tarjetas de acción */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* Session bar — badge PREMIUM + UserButton en la esquina superior de la columna */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, minHeight: 32 }}>
+              {isLoaded && isSignedIn && isPremium && (
+                <span style={{
+                  fontFamily: 'var(--font-label)', fontSize: 11, letterSpacing: 1,
+                  color: 'var(--accent)', background: 'var(--bg-raised)',
+                  border: '1.5px solid var(--accent)', borderRadius: 4,
+                  padding: '3px 8px', lineHeight: 1,
+                }}>
+                  ✨ PREMIUM
+                </span>
+              )}
+              {isLoaded && (isSignedIn ? (
+                <UserButton afterSignOutUrl="/" />
+              ) : (
+                <SignInButton mode="modal">
+                  <button
+                    className="btn btn--secondary"
+                    style={{ fontSize: 13, padding: '5px 12px', letterSpacing: 0.5 }}
+                  >
+                    INICIAR SESIÓN
+                  </button>
+                </SignInButton>
+              ))}
+            </div>
+
             {/* CREAR */}
-            <PixelFrame style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <PixelFrame style={{ flex: 1, padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span className="pixel-label" style={{ color: 'var(--accent)' }}>OPCIÓN A</span>
                 <span className="pixel-label">anfitrión</span>
@@ -251,7 +251,7 @@ function HomeScreen() {
             </PixelFrame>
 
             {/* UNIRSE */}
-            <PixelFrame variant="sunk" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <PixelFrame variant="sunk" style={{ flex: 1, padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span className="pixel-label" style={{ color: 'var(--accent-2)' }}>OPCIÓN B</span>
                 <span className="pixel-label">invitado</span>

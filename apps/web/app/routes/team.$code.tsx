@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getCatalog, submitTeam, startBattle, getRoomState, type PokemonSummary, type MoveDetail, getPokemonDetail } from '../lib/api';
 import { TypeBadge, PixelFrame, CreatureCard, TitleBar } from '../components/shared';
 import { TYPE_LIST, typeColor } from '../lib/types';
+import { useSubscription } from '../hooks/useSubscription';
 
 export const Route = createFileRoute('/team/$code')({
   component: TeamSelectScreen,
@@ -19,6 +20,7 @@ interface TeamEntry {
 function TeamSelectScreen() {
   const { code } = Route.useParams();
   const navigate = useNavigate();
+  const { isPremium } = useSubscription();
 
   const session = (() => {
     try { return JSON.parse(sessionStorage.getItem(`pb:${code}`) ?? '{}'); } catch { return {}; }
@@ -171,7 +173,7 @@ function TeamSelectScreen() {
             </PixelFrame>
           </div>
         )}
-        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 326px', gridTemplateRows: 'auto 1fr auto', gap: 12, padding: '14px 18px 18px', minHeight: 0 }}>
+        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gridTemplateRows: 'auto 1fr auto', gap: 12, padding: '14px 18px 18px', minHeight: 0 }}>
           {/* HEADER */}
           <div style={{ gridColumn: '1 / -1' }} className="row">
             <div style={{ flex: 1 }}>
@@ -198,7 +200,7 @@ function TeamSelectScreen() {
             {catalogLoading ? (
               <div style={{ margin: 'auto', fontFamily: 'var(--font-body)', fontSize: 20, color: 'var(--ink-mute)' }}>Cargando catálogo…</div>
             ) : (
-              <div className="scroll-box" style={{ flex: 1, padding: 4, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gridAutoRows: 'min-content', gap: 10 }}>
+              <div className="scroll-box" style={{ flex: 1, padding: 4, minHeight: 0, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gridAutoRows: '190px', gap: 10 }}>
                 {filtered.length === 0 ? (
                   <div style={{ gridColumn: '1 / -1', padding: 40, textAlign: 'center', fontFamily: 'var(--font-body)', fontSize: 20, color: 'var(--ink-mute)' }}>
                     No hay criaturas con esos filtros.
@@ -236,7 +238,7 @@ function TeamSelectScreen() {
                   {team.length} / {MAX_TEAM}
                 </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
                 {Array.from({ length: MAX_TEAM }).map((_, i) => {
                   const entry = team[i];
                   const isActive = activeIdx === i;
@@ -249,7 +251,7 @@ function TeamSelectScreen() {
                       style={{
                         position: 'relative', height: 86,
                         background: entry ? (isActive ? 'var(--hl)' : 'var(--surface)') : 'var(--surface-sunk)',
-                        border: `3px ${entry ? 'solid' : 'dashed'} ${isActive ? 'var(--accent)' : 'var(--line)'}`,
+                        border: `3px ${entry ? 'solid' : 'dashed'} ${isActive ? 'var(--accent)' : (isPremium && entry ? '#f0c040' : 'var(--line)')}`,
                         borderRadius: 8,
                         boxShadow: entry ? 'inset 0 0 0 2px var(--surface), 0 2px 0 var(--shadow)' : 'none',
                         cursor: entry ? 'pointer' : 'default',
@@ -267,6 +269,9 @@ function TeamSelectScreen() {
                             onClick={(e) => { e.stopPropagation(); removeFromTeam(i); }}
                             style={{ position: 'absolute', top: -6, left: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--surface)', color: 'var(--bad)', fontFamily: 'var(--font-label)', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--line)', cursor: 'pointer' }}
                           >×</span>
+                          {isPremium && (
+                            <span style={{ position: 'absolute', bottom: 3, left: '50%', transform: 'translateX(-50%)', fontSize: 16, lineHeight: 1, pointerEvents: 'none' }} title="Shiny en batalla">✨</span>
+                          )}
                         </>
                       ) : (
                         <span style={{ margin: 'auto', fontFamily: 'var(--font-label)', fontSize: 11, color: 'var(--ink-mute)' }}>SLOT {i + 1}</span>

@@ -23,6 +23,8 @@ const PokemonSchema = new mongoose.Schema({
   },
   spriteFrontUrl: String,
   spriteBackUrl: String,
+  spriteFrontShinyUrl: String,
+  spriteBackShinyUrl: String,
   damagingMoveIds: [String],
   statusMoveIds: [String],
   isLegendary: Boolean,
