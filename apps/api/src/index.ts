@@ -5,6 +5,7 @@ import rooms from './routes/rooms';
 import battle from './routes/battle';
 import catalog from './routes/catalog';
 import me from './routes/me';
+import payments from './routes/payments';
 import type { AppEnv } from './types';
 
 const app = new Hono<AppEnv>();
@@ -15,6 +16,7 @@ app.route('/rooms', rooms);
 app.route('/battle', battle);
 app.route('/catalog', catalog);
 app.route('/me', me);
+app.route('/payments', payments);
 
 const PORT = parseInt(process.env.PORT ?? '3001');
 

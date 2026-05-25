@@ -111,6 +111,26 @@ export function getPokemonDetail(id: string) {
   return req<PokemonDetail>(`/catalog/pokemon/${id}`);
 }
 
+// Payments
+export function createCheckoutSession(token: string) {
+  return req<{ url: string }>('/payments/checkout-session', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export interface SubscriptionState {
+  isPremium: boolean;
+  status: string | null;
+  currentPeriodEnd: string | null;
+}
+
+export function getSubscription(token: string) {
+  return req<SubscriptionState>('/me/subscription', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
 // Battle
 export function sendAction(
   code: string,

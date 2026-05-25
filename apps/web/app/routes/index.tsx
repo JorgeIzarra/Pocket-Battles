@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import { useUser, useAuth, SignInButton, UserButton } from '@clerk/clerk-react';
-import { createRoom, joinRoom } from '../lib/api';
+import { createRoom, joinRoom, createCheckoutSession } from '../lib/api';
+import { useSubscription } from '../hooks/useSubscription';
 import { BrandMark, PixelFrame, TitleBar } from '../components/shared';
 
 export const Route = createFileRoute('/')({
@@ -13,10 +14,13 @@ function HomeScreen() {
   const { isLoaded, isSignedIn, user } = useUser();
   const { getToken } = useAuth();
 
+  const { isPremium, loading: subLoading, refresh: refreshSub } = useSubscription();
+
   const [guestName, setGuestName] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [premiumToast, setPremiumToast] = useState(false);
 
   // Redirect authenticated users who haven't chosen an avatar yet
   useEffect(() => {
@@ -24,6 +28,18 @@ function HomeScreen() {
       navigate({ to: '/select-avatar' });
     }
   }, [isLoaded, isSignedIn, user?.publicMetadata?.avatarId]);
+
+  // Detectar retorno desde Stripe Checkout con ?premium=success
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('premium') === 'success') {
+      refreshSub();
+      setPremiumToast(true);
+      history.replaceState(null, '', '/');
+      const t = setTimeout(() => setPremiumToast(false), 5000);
+      return () => clearTimeout(t);
+    }
+  }, []);
 
   // Nombre derivado del perfil de Clerk; fallback robusto para cuentas solo con email
   const clerkName = user
@@ -41,6 +57,21 @@ function HomeScreen() {
   const canJoin = canCreate && trimmedCode.length >= 4;
 
   const avatarId = isSignedIn ? ((user?.publicMetadata?.avatarId as string | undefined) ?? null) : null;
+
+  async function handlePremium() {
+    if (!isSignedIn || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const token = (await getToken()) ?? '';
+      const { url } = await createCheckoutSession(token);
+      if (url) window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error al iniciar el pago');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleCreate() {
     if (!canCreate || loading) return;
@@ -79,8 +110,18 @@ function HomeScreen() {
       <TitleBar step={1} />
       <div className="screen" data-screen-label="01 Inicio" style={{ position: 'relative' }}>
 
-        {/* Botón de sesión — esquina superior derecha */}
-        <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 10 }}>
+        {/* Botón de sesión + badge Premium — esquina superior derecha */}
+        <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          {isLoaded && isSignedIn && isPremium && (
+            <span style={{
+              fontFamily: 'var(--font-label)', fontSize: 11, letterSpacing: 1,
+              color: 'var(--accent)', background: 'var(--bg-raised)',
+              border: '1.5px solid var(--accent)', borderRadius: 4,
+              padding: '3px 8px', lineHeight: 1,
+            }}>
+              ✨ PREMIUM
+            </span>
+          )}
           {isLoaded && isSignedIn ? (
             <UserButton afterSignOutUrl="/" />
           ) : (
@@ -94,6 +135,19 @@ function HomeScreen() {
             </SignInButton>
           )}
         </div>
+
+        {/* Toast de bienvenida Premium */}
+        {premiumToast && (
+          <div style={{
+            position: 'absolute', top: 52, right: 18, zIndex: 20,
+            fontFamily: 'var(--font-label)', fontSize: 13, letterSpacing: 0.8,
+            color: 'var(--accent)', background: 'var(--bg-raised)',
+            border: '2px solid var(--accent)', borderRadius: 6,
+            padding: '8px 16px', boxShadow: '4px 4px 0 var(--line-soft)',
+          }}>
+            ✨ ¡Eres Premium! Bienvenido al club.
+          </div>
+        )}
 
         <div style={{
           flex: 1, display: 'grid',
@@ -132,6 +186,16 @@ function HomeScreen() {
                     }}>
                       {user.primaryEmailAddress.emailAddress}
                     </div>
+                  )}
+                  {!subLoading && !isPremium && (
+                    <button
+                      className="btn btn--primary btn--block"
+                      style={{ marginTop: 12, fontSize: 13, letterSpacing: 0.8, padding: '8px 12px' }}
+                      onClick={handlePremium}
+                      disabled={loading}
+                    >
+                      ✨ POCKET BATTLES PREMIUM · $4.99/mes
+                    </button>
                   )}
                 </div>
               </PixelFrame>
