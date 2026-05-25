@@ -35,7 +35,7 @@ payments.post('/webhook', async (c) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+    event = await stripe.webhooks.constructEventAsync(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET!);
   } catch (err) {
     console.error('[Stripe] invalid webhook signature:', err);
     return c.json({ error: 'Invalid signature' }, 400);
@@ -60,7 +60,7 @@ payments.post('/webhook', async (c) => {
           status: 'active',
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
-          currentPeriodEnd: new Date(sub.current_period_end * 1000),
+          currentPeriodEnd: new Date(sub.items.data[0].current_period_end * 1000),
         },
         { upsert: true, new: true },
       );
@@ -71,7 +71,7 @@ payments.post('/webhook', async (c) => {
         { stripeSubscriptionId: sub.id },
         {
           status: sub.status as 'active' | 'canceled' | 'past_due',
-          currentPeriodEnd: new Date(sub.current_period_end * 1000),
+          currentPeriodEnd: new Date(sub.items.data[0].current_period_end * 1000),
         },
       );
     } else if (event.type === 'customer.subscription.deleted') {
